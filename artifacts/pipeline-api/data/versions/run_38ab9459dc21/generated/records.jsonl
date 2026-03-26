@@ -1,0 +1,1 @@
+{"id":"ds_fb1cc466df11","type":"qa","instruction":"What is being tested in the text?","input":"","output":"YAML passthrough through Node.js API proxy.","provenance":{"source_id":"src_2a3c9a423fc6","chunk_id":"chk_9f3d0ac84039"},"scores":{"relevance":0.0,"clarity":0.0,"grounding":0.0,"diversity":0.0,"final":0.0},"meta":{"generator":"v1","seed":42,"mode":"qa"}}

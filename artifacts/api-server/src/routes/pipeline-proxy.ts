@@ -6,47 +6,65 @@ const router: IRouter = Router();
 const PIPELINE_HOST = "localhost";
 const PIPELINE_PORT = 8000;
 
-function proxyToPipeline(req: Request, res: Response): void {
+function streamProxyRequest(
+  req: Request,
+  res: Response,
+  targetPath: string,
+): void {
   const search = req.url.includes("?") ? req.url.substring(req.url.indexOf("?")) : "";
-  const subPath = req.path === "/" ? "" : req.path;
-  const fullPath = "/pipeline" + subPath + search;
+  const fullPath = targetPath + search;
+
+  const outHeaders: http.OutgoingHttpHeaders = {
+    ...req.headers,
+    host: `${PIPELINE_HOST}:${PIPELINE_PORT}`,
+  };
+
+  const rawBody: Buffer | undefined = (req as Request & { rawBody?: Buffer }).rawBody;
+
+  if (rawBody && rawBody.length > 0) {
+    outHeaders["content-length"] = rawBody.length;
+  } else {
+    delete outHeaders["content-length"];
+    delete outHeaders["transfer-encoding"];
+  }
 
   const options: http.RequestOptions = {
     hostname: PIPELINE_HOST,
     port: PIPELINE_PORT,
     path: fullPath,
     method: req.method,
-    headers: {
-      ...req.headers,
-      host: `${PIPELINE_HOST}:${PIPELINE_PORT}`,
-    },
+    headers: outHeaders,
   };
 
   const proxyReq = http.request(options, (proxyRes) => {
-    const contentDisposition = proxyRes.headers["content-disposition"];
-    if (contentDisposition) {
-      res.setHeader("content-disposition", contentDisposition);
-    }
-    res.writeHead(proxyRes.statusCode ?? 200, proxyRes.headers);
+    const forwardHeaders: http.IncomingHttpHeaders = { ...proxyRes.headers };
+    res.writeHead(proxyRes.statusCode ?? 200, forwardHeaders);
     proxyRes.pipe(res);
   });
 
   proxyReq.on("error", (err) => {
-    res.status(502).json({ error: "Pipeline API unavailable", detail: (err as Error).message });
+    if (!res.headersSent) {
+      res.status(502).json({ error: "Pipeline API unavailable", detail: (err as Error).message });
+    }
   });
 
-  if (req.body && Object.keys(req.body).length > 0) {
-    const body = JSON.stringify(req.body);
-    proxyReq.setHeader("content-type", "application/json");
-    proxyReq.setHeader("content-length", Buffer.byteLength(body));
-    proxyReq.write(body);
+  if (rawBody && rawBody.length > 0) {
+    proxyReq.write(rawBody);
   }
 
   proxyReq.end();
 }
 
-router.use("/pipeline", (req: Request, res: Response, next: NextFunction) => {
-  proxyToPipeline(req, res);
-});
+function makePipelineHandler(pathPrefix: string) {
+  return (req: Request, res: Response): void => {
+    const subPath = req.path === "/" ? "" : req.path;
+    streamProxyRequest(req, res, pathPrefix + subPath);
+  };
+}
+
+router.use("/pipeline", makePipelineHandler("/pipeline"));
+router.use("/runs", makePipelineHandler("/runs"));
+router.use("/datasets", makePipelineHandler("/datasets"));
+router.use("/ingest", makePipelineHandler("/ingest"));
 
 export default router;

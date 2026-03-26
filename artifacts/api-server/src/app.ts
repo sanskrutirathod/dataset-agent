@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
@@ -26,7 +26,24 @@ app.use(
   }),
 );
 app.use(cors());
-app.use(express.json());
+
+app.use(
+  express.json({
+    verify: (req: Request, _res: Response, buf: Buffer) => {
+      (req as Request & { rawBody?: Buffer }).rawBody = buf;
+    },
+  }),
+);
+
+app.use(
+  express.text({
+    type: ["text/plain", "application/yaml", "text/yaml"],
+    verify: (req: Request, _res: Response, buf: Buffer) => {
+      (req as Request & { rawBody?: Buffer }).rawBody = buf;
+    },
+  }),
+);
+
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);

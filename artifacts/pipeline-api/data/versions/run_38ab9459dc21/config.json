@@ -1,0 +1,29 @@
+{
+  "run_name": "yaml-proxy-test",
+  "sources": [
+    {
+      "type": "text",
+      "value": "Testing YAML passthrough through Node.js API proxy.",
+      "title": "YAML proxy test"
+    }
+  ],
+  "chunk": {
+    "target_tokens": 600,
+    "overlap": 80
+  },
+  "generation": {
+    "mode": "qa",
+    "temperature": 0.2,
+    "max_records_per_chunk": 1
+  },
+  "validation": {
+    "min_length": 50,
+    "max_length": 4096,
+    "score_threshold": 0.75,
+    "grounding_min_overlap": 0.1
+  },
+  "limits": {
+    "max_records": 3,
+    "max_per_source": 1000
+  }
+}
