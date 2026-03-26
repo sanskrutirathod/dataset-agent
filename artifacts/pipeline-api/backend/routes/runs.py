@@ -2,16 +2,16 @@
 from __future__ import annotations
 import json
 import logging
-import threading
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
-from fastapi.responses import FileResponse, PlainTextResponse
+import yaml
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
+from fastapi.responses import FileResponse
 
 from ..schemas import (
     PipelineRunRequest, PipelineRunResponse, RunListItem, RunDetail,
-    RunStatus, RunMetrics, StageMetrics, DownloadFormat
+    RunStatus, RunMetrics, StageMetrics, DownloadFormat, PipelineConfig
 )
 from ..pipeline.db import create_run, get_run, list_runs
 from ..pipeline.orchestrator import run_pipeline
@@ -42,14 +42,49 @@ def _parse_stage_metrics(row: dict) -> list[StageMetrics]:
         return []
 
 
+async def _parse_run_request(request: Request) -> PipelineConfig:
+    """Parse pipeline run config from JSON or YAML body."""
+    content_type = request.headers.get("content-type", "")
+    body = await request.body()
+    if not body:
+        raise HTTPException(status_code=422, detail="Request body is required")
+
+    if "yaml" in content_type or "text/plain" in content_type:
+        try:
+            data = yaml.safe_load(body.decode("utf-8"))
+        except yaml.YAMLError as e:
+            raise HTTPException(status_code=422, detail=f"Invalid YAML: {e}")
+    else:
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError as e:
+            try:
+                data = yaml.safe_load(body.decode("utf-8"))
+            except Exception:
+                raise HTTPException(status_code=422, detail=f"Invalid JSON: {e}")
+
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=422, detail="Request body must be an object")
+
+    config_data = data.get("config", data)
+    try:
+        return PipelineConfig.model_validate(config_data)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Config validation error: {e}")
+
+
 @router.post("/run", response_model=PipelineRunResponse)
 async def start_pipeline_run(
-    body: PipelineRunRequest,
+    request: Request,
     background_tasks: BackgroundTasks,
 ) -> PipelineRunResponse:
-    """Start a new pipeline run."""
+    """Start a new dataset pipeline run.
+
+    Accepts either JSON or YAML body. The body may be either a full
+    `{config: {...}}` wrapper or the config object directly.
+    """
+    config = await _parse_run_request(request)
     run_id = new_id("run")
-    config = body.config
 
     create_run(run_id, config.run_name, config.model_dump())
 
@@ -62,31 +97,19 @@ async def start_pipeline_run(
     )
 
 
-@router.get("/runs", response_model=list[RunListItem])
-async def get_runs() -> list[RunListItem]:
-    """List all pipeline runs."""
-    rows = list_runs()
-    result = []
-    for row in rows:
-        result.append(RunListItem(
-            run_id=row["run_id"],
-            run_name=row["run_name"],
-            status=RunStatus(row["status"]),
-            created_at=row["created_at"],
-            updated_at=row["updated_at"],
-            metrics=_parse_metrics(row),
-            stage_metrics=_parse_stage_metrics(row),
-        ))
-    return result
+def _make_run_list_item(row: dict) -> RunListItem:
+    return RunListItem(
+        run_id=row["run_id"],
+        run_name=row["run_name"],
+        status=RunStatus(row["status"]),
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+        metrics=_parse_metrics(row),
+        stage_metrics=_parse_stage_metrics(row),
+    )
 
 
-@router.get("/runs/{run_id}", response_model=RunDetail)
-async def get_run_detail(run_id: str) -> RunDetail:
-    """Get details for a specific run."""
-    row = get_run(run_id)
-    if not row:
-        raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
-
+def _make_run_detail(row: dict) -> RunDetail:
     config_data = None
     if row.get("config_json"):
         try:
@@ -107,12 +130,7 @@ async def get_run_detail(run_id: str) -> RunDetail:
     )
 
 
-@router.get("/runs/{run_id}/download")
-async def download_dataset(
-    run_id: str,
-    format: DownloadFormat = DownloadFormat.jsonl,
-) -> FileResponse:
-    """Download the dataset export for a run."""
+def _build_file_response(run_id: str, format: DownloadFormat) -> FileResponse:
     row = get_run(run_id)
     if not row:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
@@ -141,3 +159,72 @@ async def download_dataset(
         media_type=media_type,
         filename=filename,
     )
+
+
+@router.get("/runs", response_model=list[RunListItem])
+async def get_runs() -> list[RunListItem]:
+    """List all pipeline runs."""
+    return [_make_run_list_item(row) for row in list_runs()]
+
+
+@router.get("/runs/{run_id}", response_model=RunDetail)
+async def get_run_detail(run_id: str) -> RunDetail:
+    """Get details for a specific run."""
+    row = get_run(run_id)
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+    return _make_run_detail(row)
+
+
+@router.get("/runs/{run_id}/download")
+async def download_dataset(
+    run_id: str,
+    format: DownloadFormat = DownloadFormat.jsonl,
+) -> FileResponse:
+    """Download the dataset export for a run (via run-scoped path)."""
+    return _build_file_response(run_id, format)
+
+
+datasets_router = APIRouter(prefix="/datasets", tags=["datasets"])
+
+
+@datasets_router.get("", response_model=list[RunListItem])
+async def list_datasets() -> list[RunListItem]:
+    """List all datasets (alias for /pipeline/runs)."""
+    return [_make_run_list_item(row) for row in list_runs()]
+
+
+@datasets_router.get("/{dataset_id}", response_model=RunDetail)
+async def get_dataset(dataset_id: str) -> RunDetail:
+    """Get a dataset by run_id (alias for /pipeline/runs/{id})."""
+    row = get_run(dataset_id)
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Dataset {dataset_id} not found")
+    return _make_run_detail(row)
+
+
+@datasets_router.get("/{dataset_id}/download")
+async def download_dataset_by_id(
+    dataset_id: str,
+    format: DownloadFormat = DownloadFormat.jsonl,
+) -> FileResponse:
+    """Download dataset export (alias for /pipeline/runs/{id}/download)."""
+    return _build_file_response(dataset_id, format)
+
+
+runs_router = APIRouter(prefix="/runs", tags=["runs"])
+
+
+@runs_router.get("", response_model=list[RunListItem])
+async def list_runs_alias() -> list[RunListItem]:
+    """List all runs (top-level alias for /pipeline/runs)."""
+    return [_make_run_list_item(row) for row in list_runs()]
+
+
+@runs_router.get("/{run_id}", response_model=RunDetail)
+async def get_run_alias(run_id: str) -> RunDetail:
+    """Get run detail (top-level alias for /pipeline/runs/{id})."""
+    row = get_run(run_id)
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+    return _make_run_detail(row)

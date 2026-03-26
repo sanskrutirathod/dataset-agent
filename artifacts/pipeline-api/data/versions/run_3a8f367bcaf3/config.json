@@ -1,0 +1,29 @@
+{
+  "run_name": "yaml-test-run",
+  "sources": [
+    {
+      "type": "text",
+      "value": "YAML is a data serialization format. It is used for configuration files and data exchange.",
+      "title": "YAML overview"
+    }
+  ],
+  "chunk": {
+    "target_tokens": 600,
+    "overlap": 80
+  },
+  "generation": {
+    "mode": "qa",
+    "temperature": 0.2,
+    "max_records_per_chunk": 1
+  },
+  "validation": {
+    "min_length": 50,
+    "max_length": 4096,
+    "score_threshold": 0.75,
+    "grounding_min_overlap": 0.1
+  },
+  "limits": {
+    "max_records": 5,
+    "max_per_source": 1000
+  }
+}

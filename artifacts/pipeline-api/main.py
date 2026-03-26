@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.pipeline.db import init_db
 from backend.routes.ingest import router as ingest_router
-from backend.routes.runs import router as runs_router
+from backend.routes.runs import router as pipeline_router, datasets_router, runs_router as top_runs_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -42,7 +42,9 @@ app.add_middleware(
 )
 
 app.include_router(ingest_router)
-app.include_router(runs_router)
+app.include_router(pipeline_router)
+app.include_router(datasets_router)
+app.include_router(top_runs_router)
 
 
 @app.get("/pipeline/healthz", tags=["health"])

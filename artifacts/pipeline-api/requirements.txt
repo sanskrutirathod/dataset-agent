@@ -11,3 +11,4 @@ openai==1.59.5
 python-multipart==0.0.20
 aiohttp==3.11.11
 httpx==0.28.1
+pyyaml==6.0.2

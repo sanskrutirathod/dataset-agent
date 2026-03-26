@@ -1,10 +1,13 @@
 """Ingest module: fetch URLs and accept text input, output raw Source objects."""
 from __future__ import annotations
+import ipaddress
 import json
 import logging
+import socket
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import requests
 from requests.adapters import HTTPAdapter, Retry
@@ -20,6 +23,57 @@ HEADERS = {
         "+https://webspaceai.app)"
     )
 }
+
+ALLOWED_SCHEMES = {"http", "https"}
+
+_PRIVATE_NETWORKS = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("fc00::/7"),
+    ipaddress.ip_network("fe80::/10"),
+    ipaddress.ip_network("100.64.0.0/10"),
+]
+
+
+def _is_safe_url(url: str) -> tuple[bool, str]:
+    """Check URL is safe to fetch (no SSRF risk)."""
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False, "Invalid URL"
+
+    if parsed.scheme not in ALLOWED_SCHEMES:
+        return False, f"Scheme '{parsed.scheme}' not allowed; use http or https"
+
+    hostname = parsed.hostname
+    if not hostname:
+        return False, "No hostname in URL"
+
+    try:
+        addrs = socket.getaddrinfo(hostname, None)
+    except socket.gaierror as e:
+        return False, f"DNS resolution failed: {e}"
+
+    for addr_info in addrs:
+        ip_str = addr_info[4][0]
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except ValueError:
+            return False, f"Could not parse resolved IP: {ip_str}"
+        for net in _PRIVATE_NETWORKS:
+            if ip in net:
+                return False, (
+                    f"URL resolves to private/internal address {ip} "
+                    f"(network {net}) — not allowed"
+                )
+        if ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_unspecified:
+            return False, f"URL resolves to reserved address {ip} — not allowed"
+
+    return True, ""
 
 
 def _make_session() -> requests.Session:
@@ -61,7 +115,11 @@ def _html_to_text(html: str, url: str = "") -> str:
 
 
 def ingest_url(url: str) -> Source | None:
-    """Fetch a URL and extract text."""
+    """Fetch a URL and extract text. Raises ValueError for unsafe URLs (SSRF prevention)."""
+    safe, reason = _is_safe_url(url)
+    if not safe:
+        raise ValueError(f"URL blocked for security: {reason}")
+
     session = _make_session()
     try:
         resp = session.get(url, timeout=15)
