@@ -34,6 +34,7 @@ export default function NewRunPage() {
   const [maxRecords, setMaxRecords] = useState(100);
   const [maxPerChunk, setMaxPerChunk] = useState(3);
   const [targetTokens, setTargetTokens] = useState(200);
+  const [chunkOverlap, setChunkOverlap] = useState(40);
   const [scoreThreshold, setScoreThreshold] = useState(0.3);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,7 +81,7 @@ export default function NewRunPage() {
         value: s.value.trim(),
         title: s.title.trim() || undefined,
       } as SourceConfig)),
-      chunk: { target_tokens: targetTokens, overlap: Math.round(targetTokens * 0.2) },
+      chunk: { target_tokens: targetTokens, overlap: chunkOverlap },
       generation: { mode: genMode, max_records_per_chunk: maxPerChunk },
       validation: { min_length: 20, score_threshold: scoreThreshold },
       limits: { max_records: maxRecords, max_per_source: Math.ceil(maxRecords / validSources.length) },
@@ -269,6 +270,22 @@ export default function NewRunPage() {
             <div className="flex justify-between text-xs text-muted-foreground mt-1">
               <span>50</span><span>1000</span>
             </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <Label className="text-sm text-foreground">Chunk Overlap (tokens)</Label>
+              <span className="text-sm font-semibold text-primary tabular-nums">{chunkOverlap}</span>
+            </div>
+            <Slider
+              min={0} max={Math.min(targetTokens - 10, 400)} step={10}
+              value={[Math.min(chunkOverlap, Math.max(0, targetTokens - 10))]}
+              onValueChange={([v]) => setChunkOverlap(v)}
+            />
+            <div className="flex justify-between text-xs text-muted-foreground mt-1">
+              <span>0</span><span>{Math.min(targetTokens - 10, 400)}</span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Tokens shared between adjacent chunks to preserve context</p>
           </div>
 
           <div>

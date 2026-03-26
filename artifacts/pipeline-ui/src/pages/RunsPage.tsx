@@ -6,6 +6,26 @@ import { Button } from "@/components/ui/button";
 import { Plus, RefreshCw, Zap } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
+const ALL_STAGES = ["ingest", "clean", "dedup", "chunk", "generate", "validate", "score", "export"];
+
+function getCurrentStage(run: { status: string; stage_metrics?: Array<{ stage: string }> }): string {
+  const metrics = run.stage_metrics ?? [];
+  if (run.status === "completed" || run.status === "partial") {
+    return `${metrics.length}/${ALL_STAGES.length}`;
+  }
+  if (run.status === "failed") {
+    const last = metrics[metrics.length - 1];
+    return last ? last.stage : "—";
+  }
+  if (run.status === "running") {
+    const last = metrics[metrics.length - 1];
+    const lastIdx = last ? ALL_STAGES.indexOf(last.stage) : -1;
+    const next = ALL_STAGES[lastIdx + 1];
+    return next ?? last?.stage ?? "starting";
+  }
+  return "—";
+}
+
 export default function RunsPage() {
   const { data: runs, isLoading, refetch, isFetching } = useQuery({
     queryKey: ["runs"],
@@ -71,6 +91,7 @@ export default function RunsPage() {
               <tr>
                 <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Run</th>
                 <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Stage</th>
                 <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Records</th>
                 <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Ingest</th>
                 <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Val. Pass</th>
@@ -88,6 +109,9 @@ export default function RunsPage() {
                   </td>
                   <td className="px-5 py-4">
                     <StatusBadge status={run.status} />
+                  </td>
+                  <td className="px-5 py-4 text-sm text-muted-foreground font-mono tabular-nums">
+                    {getCurrentStage(run)}
                   </td>
                   <td className="px-5 py-4 text-sm text-foreground tabular-nums">
                     {run.metrics?.total_records ?? <span className="text-muted-foreground">—</span>}
