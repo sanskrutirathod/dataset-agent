@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+data/pipeline.db
+data/pipeline.db-shm
+data/pipeline.db-wal
+data/versions/

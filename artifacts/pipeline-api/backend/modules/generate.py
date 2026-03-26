@@ -115,6 +115,12 @@ def generate_for_chunk(
     prompt_template = PROMPTS.get(mode, QA_PROMPT)
     prompt = prompt_template.format(text=chunk.text[:4000], n=n)
 
+    if hasattr(config, "temperature") and config.temperature is not None and config.temperature != 1.0:
+        logger.debug(
+            f"temperature={config.temperature} requested but the current model only supports "
+            "the default value (1.0); parameter is not forwarded to the API"
+        )
+
     for attempt in range(3):
         try:
             response = client.chat.completions.create(

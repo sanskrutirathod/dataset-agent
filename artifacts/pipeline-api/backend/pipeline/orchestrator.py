@@ -235,7 +235,8 @@ def run_pipeline(run_id: str, config: PipelineConfig) -> None:
         ))
 
         _compute_and_save_metrics(
-            run_id, sources, cleaned, deduped, chunks, records, final_records, stage_metrics
+            run_id, sources, cleaned, deduped, chunks, records, final_records,
+            stage_metrics, attempted_source_count=len(config.sources)
         )
         update_run_status(run_id, RunStatus.completed)
         logger.info(f"[{run_id}] pipeline completed: {len(final_records)} final records")
@@ -249,21 +250,27 @@ def _compute_and_save_metrics(
     run_id: str,
     sources, cleaned, deduped, chunks, generated, final_records,
     stage_metrics: list[StageMetrics],
+    attempted_source_count: int = 0,
 ) -> None:
     from .db import update_run_metrics
-    avg_chunk_tokens = sum(c.tokens for c in chunks) / max(len(chunks), 1)
-    avg_score = (
-        sum(r.scores.final for r in final_records) / max(len(final_records), 1)
-    )
-    drop_count = len(generated) - len(final_records)
+    n_sources_attempted = max(attempted_source_count, len(sources), 1)
+    n_sources_ingested = len(sources)
+    n_deduped = len(deduped)
+    n_chunks = max(len(chunks), 1)
+    n_generated = len(generated)
+    n_final = len(final_records)
+
+    avg_chunk_tokens = sum(c.tokens for c in chunks) / n_chunks if chunks else 0.0
+    avg_score = sum(r.scores.final for r in final_records) / max(n_final, 1) if final_records else 0.0
+
     metrics = RunMetrics(
-        ingest_success_rate=len(sources) / max(len(sources), 1),
-        dedup_ratio=1.0 - (len(deduped) / max(len(sources), 1)),
+        ingest_success_rate=n_sources_ingested / n_sources_attempted,
+        dedup_ratio=1.0 - (n_deduped / max(n_sources_ingested, 1)),
         avg_chunk_tokens=avg_chunk_tokens,
-        generation_yield=len(generated) / max(len(chunks), 1),
-        validation_pass_rate=len(final_records) / max(len(generated), 1),
-        avg_final_score=avg_score,
-        total_records=len(final_records),
-        drop_count=drop_count,
+        generation_yield=n_generated / n_chunks,
+        validation_pass_rate=n_final / max(n_generated, 1),
+        avg_final_score=round(avg_score, 4),
+        total_records=n_final,
+        drop_count=max(n_generated - n_final, 0),
     )
     update_run_metrics(run_id, metrics, stage_metrics)
