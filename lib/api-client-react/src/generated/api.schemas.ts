@@ -173,3 +173,16 @@ export const DownloadDatasetFormat = {
   csv: "csv",
   report: "report",
 } as const;
+
+export type DownloadDatasetByIdParams = {
+  format?: DownloadDatasetByIdFormat;
+};
+
+export type DownloadDatasetByIdFormat =
+  (typeof DownloadDatasetByIdFormat)[keyof typeof DownloadDatasetByIdFormat];
+
+export const DownloadDatasetByIdFormat = {
+  jsonl: "jsonl",
+  csv: "csv",
+  report: "report",
+} as const;

@@ -7,6 +7,8 @@
  */
 
 export * from "./chunkConfig";
+export * from "./downloadDatasetByIdFormat";
+export * from "./downloadDatasetByIdParams";
 export * from "./downloadDatasetFormat";
 export * from "./downloadDatasetParams";
 export * from "./generationConfig";

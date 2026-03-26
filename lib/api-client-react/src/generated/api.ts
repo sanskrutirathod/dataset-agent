@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  DownloadDatasetByIdParams,
   DownloadDatasetParams,
   HealthStatus,
   IngestRequest,
@@ -113,7 +114,8 @@ export function useHealthCheck<
 }
 
 /**
- * Start a new dataset pipeline run with the given config
+ * Start a new dataset pipeline run with the given config. Accepts JSON (application/json) or YAML (application/yaml / text/plain). The body may be a `{config: {...}}` wrapper or the config object directly.
+
  * @summary Start pipeline run
  */
 export const getStartPipelineRunUrl = () => {
@@ -121,14 +123,13 @@ export const getStartPipelineRunUrl = () => {
 };
 
 export const startPipelineRun = async (
-  pipelineRunRequest: PipelineRunRequest,
+  startPipelineRunBody: PipelineRunRequest | string,
   options?: RequestInit,
 ): Promise<PipelineRunResponse> => {
   return customFetch<PipelineRunResponse>(getStartPipelineRunUrl(), {
     ...options,
     method: "POST",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(pipelineRunRequest),
+    body: JSON.stringify(startPipelineRunBody),
   });
 };
 
@@ -139,14 +140,14 @@ export const getStartPipelineRunMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof startPipelineRun>>,
     TError,
-    { data: BodyType<PipelineRunRequest> },
+    { data: BodyType<PipelineRunRequest | string> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof startPipelineRun>>,
   TError,
-  { data: BodyType<PipelineRunRequest> },
+  { data: BodyType<PipelineRunRequest | string> },
   TContext
 > => {
   const mutationKey = ["startPipelineRun"];
@@ -160,7 +161,7 @@ export const getStartPipelineRunMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof startPipelineRun>>,
-    { data: BodyType<PipelineRunRequest> }
+    { data: BodyType<PipelineRunRequest | string> }
   > = (props) => {
     const { data } = props ?? {};
 
@@ -173,7 +174,9 @@ export const getStartPipelineRunMutationOptions = <
 export type StartPipelineRunMutationResult = NonNullable<
   Awaited<ReturnType<typeof startPipelineRun>>
 >;
-export type StartPipelineRunMutationBody = BodyType<PipelineRunRequest>;
+export type StartPipelineRunMutationBody = BodyType<
+  PipelineRunRequest | string
+>;
 export type StartPipelineRunMutationError = ErrorType<unknown>;
 
 /**
@@ -186,14 +189,14 @@ export const useStartPipelineRun = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof startPipelineRun>>,
     TError,
-    { data: BodyType<PipelineRunRequest> },
+    { data: BodyType<PipelineRunRequest | string> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof startPipelineRun>>,
   TError,
-  { data: BodyType<PipelineRunRequest> },
+  { data: BodyType<PipelineRunRequest | string> },
   TContext
 > => {
   return useMutation(getStartPipelineRunMutationOptions(options));
@@ -562,3 +565,516 @@ export const useIngestSources = <
 > => {
   return useMutation(getIngestSourcesMutationOptions(options));
 };
+
+/**
+ * Top-level alias for POST /pipeline/ingest
+ * @summary Ingest sources (alias)
+ */
+export const getIngestSourcesAliasUrl = () => {
+  return `/api/ingest`;
+};
+
+export const ingestSourcesAlias = async (
+  ingestRequest: IngestRequest,
+  options?: RequestInit,
+): Promise<IngestResponse> => {
+  return customFetch<IngestResponse>(getIngestSourcesAliasUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(ingestRequest),
+  });
+};
+
+export const getIngestSourcesAliasMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof ingestSourcesAlias>>,
+    TError,
+    { data: BodyType<IngestRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof ingestSourcesAlias>>,
+  TError,
+  { data: BodyType<IngestRequest> },
+  TContext
+> => {
+  const mutationKey = ["ingestSourcesAlias"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof ingestSourcesAlias>>,
+    { data: BodyType<IngestRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return ingestSourcesAlias(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type IngestSourcesAliasMutationResult = NonNullable<
+  Awaited<ReturnType<typeof ingestSourcesAlias>>
+>;
+export type IngestSourcesAliasMutationBody = BodyType<IngestRequest>;
+export type IngestSourcesAliasMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Ingest sources (alias)
+ */
+export const useIngestSourcesAlias = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof ingestSourcesAlias>>,
+    TError,
+    { data: BodyType<IngestRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof ingestSourcesAlias>>,
+  TError,
+  { data: BodyType<IngestRequest> },
+  TContext
+> => {
+  return useMutation(getIngestSourcesAliasMutationOptions(options));
+};
+
+/**
+ * Top-level alias for GET /pipeline/runs
+ * @summary List runs (alias)
+ */
+export const getListRunsUrl = () => {
+  return `/api/runs`;
+};
+
+export const listRuns = async (
+  options?: RequestInit,
+): Promise<RunListItem[]> => {
+  return customFetch<RunListItem[]>(getListRunsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListRunsQueryKey = () => {
+  return [`/api/runs`] as const;
+};
+
+export const getListRunsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listRuns>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof listRuns>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListRunsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listRuns>>> = ({
+    signal,
+  }) => listRuns({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listRuns>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListRunsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listRuns>>
+>;
+export type ListRunsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List runs (alias)
+ */
+
+export function useListRuns<
+  TData = Awaited<ReturnType<typeof listRuns>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof listRuns>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListRunsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Top-level alias for GET /pipeline/runs/{runId}
+ * @summary Get run (alias)
+ */
+export const getGetRunUrl = (runId: string) => {
+  return `/api/runs/${runId}`;
+};
+
+export const getRun = async (
+  runId: string,
+  options?: RequestInit,
+): Promise<RunDetail> => {
+  return customFetch<RunDetail>(getGetRunUrl(runId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetRunQueryKey = (runId: string) => {
+  return [`/api/runs/${runId}`] as const;
+};
+
+export const getGetRunQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRun>>,
+  TError = ErrorType<void>,
+>(
+  runId: string,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getRun>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetRunQueryKey(runId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getRun>>> = ({
+    signal,
+  }) => getRun(runId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!runId,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getRun>>, TError, TData> & {
+    queryKey: QueryKey;
+  };
+};
+
+export type GetRunQueryResult = NonNullable<Awaited<ReturnType<typeof getRun>>>;
+export type GetRunQueryError = ErrorType<void>;
+
+/**
+ * @summary Get run (alias)
+ */
+
+export function useGetRun<
+  TData = Awaited<ReturnType<typeof getRun>>,
+  TError = ErrorType<void>,
+>(
+  runId: string,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getRun>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRunQueryOptions(runId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Alias for GET /pipeline/runs — lists all completed datasets
+ * @summary List datasets
+ */
+export const getListDatasetsUrl = () => {
+  return `/api/datasets`;
+};
+
+export const listDatasets = async (
+  options?: RequestInit,
+): Promise<RunListItem[]> => {
+  return customFetch<RunListItem[]>(getListDatasetsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListDatasetsQueryKey = () => {
+  return [`/api/datasets`] as const;
+};
+
+export const getListDatasetsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listDatasets>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listDatasets>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListDatasetsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listDatasets>>> = ({
+    signal,
+  }) => listDatasets({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listDatasets>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListDatasetsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listDatasets>>
+>;
+export type ListDatasetsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List datasets
+ */
+
+export function useListDatasets<
+  TData = Awaited<ReturnType<typeof listDatasets>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listDatasets>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListDatasetsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Alias for GET /pipeline/runs/{id}
+ * @summary Get dataset
+ */
+export const getGetDatasetUrl = (datasetId: string) => {
+  return `/api/datasets/${datasetId}`;
+};
+
+export const getDataset = async (
+  datasetId: string,
+  options?: RequestInit,
+): Promise<RunDetail> => {
+  return customFetch<RunDetail>(getGetDatasetUrl(datasetId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDatasetQueryKey = (datasetId: string) => {
+  return [`/api/datasets/${datasetId}`] as const;
+};
+
+export const getGetDatasetQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDataset>>,
+  TError = ErrorType<void>,
+>(
+  datasetId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDataset>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDatasetQueryKey(datasetId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDataset>>> = ({
+    signal,
+  }) => getDataset(datasetId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!datasetId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDataset>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDatasetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDataset>>
+>;
+export type GetDatasetQueryError = ErrorType<void>;
+
+/**
+ * @summary Get dataset
+ */
+
+export function useGetDataset<
+  TData = Awaited<ReturnType<typeof getDataset>>,
+  TError = ErrorType<void>,
+>(
+  datasetId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDataset>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDatasetQueryOptions(datasetId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Download the JSONL, CSV, or Markdown report for a dataset
+ * @summary Download dataset by ID
+ */
+export const getDownloadDatasetByIdUrl = (
+  datasetId: string,
+  params?: DownloadDatasetByIdParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/datasets/${datasetId}/download?${stringifiedParams}`
+    : `/api/datasets/${datasetId}/download`;
+};
+
+export const downloadDatasetById = async (
+  datasetId: string,
+  params?: DownloadDatasetByIdParams,
+  options?: RequestInit,
+): Promise<Response> => {
+  return customFetch<Response>(getDownloadDatasetByIdUrl(datasetId, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getDownloadDatasetByIdQueryKey = (
+  datasetId: string,
+  params?: DownloadDatasetByIdParams,
+) => {
+  return [
+    `/api/datasets/${datasetId}/download`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getDownloadDatasetByIdQueryOptions = <
+  TData = Awaited<ReturnType<typeof downloadDatasetById>>,
+  TError = ErrorType<void>,
+>(
+  datasetId: string,
+  params?: DownloadDatasetByIdParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof downloadDatasetById>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getDownloadDatasetByIdQueryKey(datasetId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof downloadDatasetById>>
+  > = ({ signal }) =>
+    downloadDatasetById(datasetId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!datasetId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof downloadDatasetById>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type DownloadDatasetByIdQueryResult = NonNullable<
+  Awaited<ReturnType<typeof downloadDatasetById>>
+>;
+export type DownloadDatasetByIdQueryError = ErrorType<void>;
+
+/**
+ * @summary Download dataset by ID
+ */
+
+export function useDownloadDatasetById<
+  TData = Awaited<ReturnType<typeof downloadDatasetById>>,
+  TError = ErrorType<void>,
+>(
+  datasetId: string,
+  params?: DownloadDatasetByIdParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof downloadDatasetById>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getDownloadDatasetByIdQueryOptions(
+    datasetId,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}

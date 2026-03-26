@@ -16,7 +16,8 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
- * Start a new dataset pipeline run with the given config
+ * Start a new dataset pipeline run with the given config. Accepts JSON (application/json) or YAML (application/yaml / text/plain). The body may be a `{config: {...}}` wrapper or the config object directly.
+
  * @summary Start pipeline run
  */
 export const startPipelineRunBodyConfigRunNameDefault = `default_run`;
@@ -216,4 +217,193 @@ export const IngestSourcesBody = zod.object({
 export const IngestSourcesResponse = zod.object({
   source_ids: zod.array(zod.string()),
   count: zod.number(),
+});
+
+/**
+ * Top-level alias for POST /pipeline/ingest
+ * @summary Ingest sources (alias)
+ */
+export const IngestSourcesAliasBody = zod.object({
+  sources: zod.array(
+    zod.object({
+      type: zod.enum(["url", "text", "file"]),
+      value: zod.string(),
+      title: zod.string().optional(),
+    }),
+  ),
+});
+
+export const IngestSourcesAliasResponse = zod.object({
+  source_ids: zod.array(zod.string()),
+  count: zod.number(),
+});
+
+/**
+ * Top-level alias for GET /pipeline/runs
+ * @summary List runs (alias)
+ */
+export const ListRunsResponseItem = zod.object({
+  run_id: zod.string(),
+  run_name: zod.string(),
+  status: zod.enum(["pending", "running", "completed", "failed", "partial"]),
+  created_at: zod.string(),
+  updated_at: zod.string(),
+  metrics: zod
+    .object({
+      ingest_success_rate: zod.number().optional(),
+      dedup_ratio: zod.number().optional(),
+      avg_chunk_tokens: zod.number().optional(),
+      generation_yield: zod.number().optional(),
+      validation_pass_rate: zod.number().optional(),
+      avg_final_score: zod.number().optional(),
+      total_records: zod.number().optional(),
+      drop_count: zod.number().optional(),
+    })
+    .optional(),
+  stage_metrics: zod
+    .array(
+      zod.object({
+        stage: zod.string().optional(),
+        input_count: zod.number().optional(),
+        output_count: zod.number().optional(),
+        latency_ms: zod.number().optional(),
+        notes: zod.string().optional(),
+      }),
+    )
+    .optional(),
+});
+export const ListRunsResponse = zod.array(ListRunsResponseItem);
+
+/**
+ * Top-level alias for GET /pipeline/runs/{runId}
+ * @summary Get run (alias)
+ */
+export const GetRunParams = zod.object({
+  runId: zod.coerce.string(),
+});
+
+export const GetRunResponse = zod.object({
+  run_id: zod.string(),
+  run_name: zod.string(),
+  status: zod.enum(["pending", "running", "completed", "failed", "partial"]),
+  created_at: zod.string(),
+  updated_at: zod.string(),
+  config: zod.record(zod.string(), zod.unknown()).optional(),
+  metrics: zod
+    .object({
+      ingest_success_rate: zod.number().optional(),
+      dedup_ratio: zod.number().optional(),
+      avg_chunk_tokens: zod.number().optional(),
+      generation_yield: zod.number().optional(),
+      validation_pass_rate: zod.number().optional(),
+      avg_final_score: zod.number().optional(),
+      total_records: zod.number().optional(),
+      drop_count: zod.number().optional(),
+    })
+    .optional(),
+  stage_metrics: zod
+    .array(
+      zod.object({
+        stage: zod.string().optional(),
+        input_count: zod.number().optional(),
+        output_count: zod.number().optional(),
+        latency_ms: zod.number().optional(),
+        notes: zod.string().optional(),
+      }),
+    )
+    .optional(),
+  error: zod.string().nullish(),
+});
+
+/**
+ * Alias for GET /pipeline/runs — lists all completed datasets
+ * @summary List datasets
+ */
+export const ListDatasetsResponseItem = zod.object({
+  run_id: zod.string(),
+  run_name: zod.string(),
+  status: zod.enum(["pending", "running", "completed", "failed", "partial"]),
+  created_at: zod.string(),
+  updated_at: zod.string(),
+  metrics: zod
+    .object({
+      ingest_success_rate: zod.number().optional(),
+      dedup_ratio: zod.number().optional(),
+      avg_chunk_tokens: zod.number().optional(),
+      generation_yield: zod.number().optional(),
+      validation_pass_rate: zod.number().optional(),
+      avg_final_score: zod.number().optional(),
+      total_records: zod.number().optional(),
+      drop_count: zod.number().optional(),
+    })
+    .optional(),
+  stage_metrics: zod
+    .array(
+      zod.object({
+        stage: zod.string().optional(),
+        input_count: zod.number().optional(),
+        output_count: zod.number().optional(),
+        latency_ms: zod.number().optional(),
+        notes: zod.string().optional(),
+      }),
+    )
+    .optional(),
+});
+export const ListDatasetsResponse = zod.array(ListDatasetsResponseItem);
+
+/**
+ * Alias for GET /pipeline/runs/{id}
+ * @summary Get dataset
+ */
+export const GetDatasetParams = zod.object({
+  datasetId: zod.coerce.string(),
+});
+
+export const GetDatasetResponse = zod.object({
+  run_id: zod.string(),
+  run_name: zod.string(),
+  status: zod.enum(["pending", "running", "completed", "failed", "partial"]),
+  created_at: zod.string(),
+  updated_at: zod.string(),
+  config: zod.record(zod.string(), zod.unknown()).optional(),
+  metrics: zod
+    .object({
+      ingest_success_rate: zod.number().optional(),
+      dedup_ratio: zod.number().optional(),
+      avg_chunk_tokens: zod.number().optional(),
+      generation_yield: zod.number().optional(),
+      validation_pass_rate: zod.number().optional(),
+      avg_final_score: zod.number().optional(),
+      total_records: zod.number().optional(),
+      drop_count: zod.number().optional(),
+    })
+    .optional(),
+  stage_metrics: zod
+    .array(
+      zod.object({
+        stage: zod.string().optional(),
+        input_count: zod.number().optional(),
+        output_count: zod.number().optional(),
+        latency_ms: zod.number().optional(),
+        notes: zod.string().optional(),
+      }),
+    )
+    .optional(),
+  error: zod.string().nullish(),
+});
+
+/**
+ * Download the JSONL, CSV, or Markdown report for a dataset
+ * @summary Download dataset by ID
+ */
+export const DownloadDatasetByIdParams = zod.object({
+  datasetId: zod.coerce.string(),
+});
+
+export const downloadDatasetByIdQueryFormatDefault = `jsonl`;
+
+export const DownloadDatasetByIdQueryParams = zod.object({
+  format: zod
+    .enum(["jsonl", "csv", "report"])
+    .default(downloadDatasetByIdQueryFormatDefault),
 });

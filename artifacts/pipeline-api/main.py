@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.pipeline.db import init_db
-from backend.routes.ingest import router as ingest_router
+from backend.routes.ingest import router as ingest_router, ingest_alias_router
 from backend.routes.runs import router as pipeline_router, datasets_router, runs_router as top_runs_router
 
 logging.basicConfig(
@@ -42,6 +42,7 @@ app.add_middleware(
 )
 
 app.include_router(ingest_router)
+app.include_router(ingest_alias_router)
 app.include_router(pipeline_router)
 app.include_router(datasets_router)
 app.include_router(top_runs_router)

@@ -32,13 +32,23 @@ paths:
       operationId: startPipelineRun
       tags: [pipeline]
       summary: Start pipeline run
-      description: Start a new dataset pipeline run with the given config
+      description: >
+        Start a new dataset pipeline run with the given config.
+        Accepts JSON (application/json) or YAML (application/yaml / text/plain).
+        The body may be a `{config: {...}}` wrapper or the config object directly.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/PipelineRunRequest"
+          application/yaml:
+            schema:
+              $ref: "#/components/schemas/PipelineRunRequest"
+          text/plain:
+            schema:
+              type: string
+              description: YAML-formatted pipeline run config
       responses:
         "200":
           description: Run started
@@ -144,6 +154,142 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/IngestResponse"
+
+  /ingest:
+    post:
+      operationId: ingestSourcesAlias
+      tags: [pipeline]
+      summary: Ingest sources (alias)
+      description: Top-level alias for POST /pipeline/ingest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IngestRequest"
+      responses:
+        "200":
+          description: Ingestion result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestResponse"
+
+  /runs:
+    get:
+      operationId: listRuns
+      tags: [pipeline]
+      summary: List runs (alias)
+      description: Top-level alias for GET /pipeline/runs
+      responses:
+        "200":
+          description: List of runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RunListItem"
+
+  /runs/{runId}:
+    get:
+      operationId: getRun
+      tags: [pipeline]
+      summary: Get run (alias)
+      description: Top-level alias for GET /pipeline/runs/{runId}
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Run details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunDetail"
+        "404":
+          description: Run not found
+
+  /datasets:
+    get:
+      operationId: listDatasets
+      tags: [pipeline]
+      summary: List datasets
+      description: Alias for GET /pipeline/runs — lists all completed datasets
+      responses:
+        "200":
+          description: List of datasets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RunListItem"
+
+  /datasets/{datasetId}:
+    get:
+      operationId: getDataset
+      tags: [pipeline]
+      summary: Get dataset
+      description: Alias for GET /pipeline/runs/{id}
+      parameters:
+        - name: datasetId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Dataset details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunDetail"
+        "404":
+          description: Dataset not found
+
+  /datasets/{datasetId}/download:
+    get:
+      operationId: downloadDatasetById
+      tags: [pipeline]
+      summary: Download dataset by ID
+      description: Download the JSONL, CSV, or Markdown report for a dataset
+      parameters:
+        - name: datasetId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [jsonl, csv, report]
+            default: jsonl
+      responses:
+        "200":
+          description: File download
+          content:
+            application/x-ndjson:
+              schema:
+                type: string
+                format: binary
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            text/markdown:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Dataset or export not found
+        "409":
+          description: Run not complete
 
 components:
   schemas:
