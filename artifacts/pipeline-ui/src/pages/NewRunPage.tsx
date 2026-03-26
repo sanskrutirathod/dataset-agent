@@ -69,7 +69,7 @@ export default function NewRunPage() {
     }
     const validSources = sources.filter((s) => s.value.trim());
     if (validSources.length === 0) {
-      setError("At least one source is required.");
+      setError("At least one source with content is required.");
       return;
     }
 
@@ -89,184 +89,213 @@ export default function NewRunPage() {
     mutation.mutate(config);
   };
 
+  const section = "bg-card rounded-xl border border-card-border p-5 space-y-4";
+  const sectionTitle = "text-xs font-semibold text-muted-foreground uppercase tracking-wider";
+
   return (
     <div className="p-6 max-w-2xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
         <Link href="/">
-          <Button variant="ghost" size="sm" className="gap-1 text-gray-500">
+          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground hover:text-foreground">
             <ArrowLeft className="w-4 h-4" />
             Runs
           </Button>
         </Link>
-        <div className="h-4 w-px bg-gray-300" />
-        <h1 className="text-xl font-bold text-gray-900">New Pipeline Run</h1>
+        <div className="h-4 w-px bg-border" />
+        <h1 className="text-xl font-bold text-foreground">New Pipeline Run</h1>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
-          <h2 className="text-sm font-semibold text-gray-700">Run Settings</h2>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className={section}>
+          <h2 className={sectionTitle}>Run Settings</h2>
           <div>
-            <Label htmlFor="runName" className="text-sm">Run Name</Label>
+            <Label htmlFor="runName" className="text-sm text-foreground">Run Name</Label>
             <Input
               id="runName"
               value={runName}
               onChange={(e) => setRunName(e.target.value)}
               placeholder="e.g., ml-qa-v1"
-              className="mt-1"
+              className="mt-1.5 bg-background border-input text-foreground placeholder:text-muted-foreground"
             />
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+        <div className={section}>
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-700">Sources</h2>
-            <Button type="button" variant="outline" size="sm" onClick={addSource} className="gap-1">
+            <h2 className={sectionTitle}>Sources</h2>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addSource}
+              className="gap-1 border-border text-muted-foreground hover:text-foreground h-7 text-xs"
+            >
               <Plus className="w-3 h-3" />
               Add Source
             </Button>
           </div>
 
-          {sources.map((source, idx) => (
-            <div key={source.id} className="border border-gray-100 rounded-lg p-4 space-y-3 bg-gray-50">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-gray-500">Source {idx + 1}</span>
-                {sources.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeSource(source.id)}
-                    className="text-gray-400 hover:text-red-500 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+          <div className="space-y-3">
+            {sources.map((source, idx) => (
+              <div key={source.id} className="border border-border rounded-lg p-4 space-y-3 bg-background/50">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted-foreground">Source {idx + 1}</span>
+                  {sources.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeSource(source.id)}
+                      className="text-muted-foreground hover:text-red-400 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Type</Label>
+                    <Select
+                      value={source.type}
+                      onValueChange={(v) => updateSource(source.id, { type: v as "url" | "text" })}
+                    >
+                      <SelectTrigger className="mt-1.5 h-9 bg-background border-input text-foreground">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-card border-card-border">
+                        <SelectItem value="text">Text</SelectItem>
+                        <SelectItem value="url">URL</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Title (optional)</Label>
+                    <Input
+                      value={source.title}
+                      onChange={(e) => updateSource(source.id, { title: e.target.value })}
+                      placeholder="Descriptive name"
+                      className="mt-1.5 h-9 bg-background border-input text-foreground placeholder:text-muted-foreground"
+                    />
+                  </div>
+                </div>
+                {source.type === "text" ? (
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Text Content</Label>
+                    <Textarea
+                      value={source.value}
+                      onChange={(e) => updateSource(source.id, { value: e.target.value })}
+                      placeholder="Paste text to generate training data from..."
+                      className="mt-1.5 min-h-28 text-sm bg-background border-input text-foreground placeholder:text-muted-foreground resize-y"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <Label className="text-xs text-muted-foreground">URL</Label>
+                    <Input
+                      value={source.value}
+                      onChange={(e) => updateSource(source.id, { value: e.target.value })}
+                      placeholder="https://example.com/article"
+                      className="mt-1.5 bg-background border-input text-foreground placeholder:text-muted-foreground"
+                    />
+                  </div>
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Type</Label>
-                  <Select
-                    value={source.type}
-                    onValueChange={(v) => updateSource(source.id, { type: v as "url" | "text" })}
-                  >
-                    <SelectTrigger className="mt-1 h-9">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="text">Text</SelectItem>
-                      <SelectItem value="url">URL</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs">Title (optional)</Label>
-                  <Input
-                    value={source.title}
-                    onChange={(e) => updateSource(source.id, { title: e.target.value })}
-                    placeholder="Descriptive name"
-                    className="mt-1 h-9"
-                  />
-                </div>
-              </div>
-              {source.type === "text" ? (
-                <div>
-                  <Label className="text-xs">Text Content</Label>
-                  <Textarea
-                    value={source.value}
-                    onChange={(e) => updateSource(source.id, { value: e.target.value })}
-                    placeholder="Paste text to generate training data from..."
-                    className="mt-1 min-h-24 text-sm"
-                  />
-                </div>
-              ) : (
-                <div>
-                  <Label className="text-xs">URL</Label>
-                  <Input
-                    value={source.value}
-                    onChange={(e) => updateSource(source.id, { value: e.target.value })}
-                    placeholder="https://example.com/article"
-                    className="mt-1"
-                  />
-                </div>
-              )}
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-5">
-          <h2 className="text-sm font-semibold text-gray-700">Generation Settings</h2>
+        <div className={section}>
+          <h2 className={sectionTitle}>Generation Settings</h2>
 
           <div>
-            <Label className="text-sm">Generation Mode</Label>
+            <Label className="text-sm text-foreground">Generation Mode</Label>
             <Select value={genMode} onValueChange={(v) => setGenMode(v as typeof genMode)}>
-              <SelectTrigger className="mt-1">
+              <SelectTrigger className="mt-1.5 bg-background border-input text-foreground">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-card border-card-border">
                 <SelectItem value="qa">Q&A Pairs</SelectItem>
                 <SelectItem value="instruction">Instruction Following</SelectItem>
                 <SelectItem value="summary">Summarization</SelectItem>
                 <SelectItem value="chat">Chat / Dialogue</SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground mt-1.5">
+              {genMode === "qa" && "Generate question-answer pairs for fine-tuning"}
+              {genMode === "instruction" && "Generate instruction-response pairs (Alpaca format)"}
+              {genMode === "summary" && "Generate document-summary pairs"}
+              {genMode === "chat" && "Generate multi-turn conversation examples"}
+            </p>
           </div>
 
           <div>
-            <Label className="text-sm">Max Total Records: {maxRecords}</Label>
+            <div className="flex items-center justify-between mb-2">
+              <Label className="text-sm text-foreground">Max Total Records</Label>
+              <span className="text-sm font-semibold text-primary tabular-nums">{maxRecords}</span>
+            </div>
             <Slider
-              min={10}
-              max={1000}
-              step={10}
+              min={10} max={1000} step={10}
               value={[maxRecords]}
               onValueChange={([v]) => setMaxRecords(v)}
-              className="mt-2"
             />
+            <div className="flex justify-between text-xs text-muted-foreground mt-1">
+              <span>10</span><span>1000</span>
+            </div>
           </div>
 
           <div>
-            <Label className="text-sm">Records per Chunk: {maxPerChunk}</Label>
+            <div className="flex items-center justify-between mb-2">
+              <Label className="text-sm text-foreground">Records per Chunk</Label>
+              <span className="text-sm font-semibold text-primary tabular-nums">{maxPerChunk}</span>
+            </div>
             <Slider
-              min={1}
-              max={10}
-              step={1}
+              min={1} max={10} step={1}
               value={[maxPerChunk]}
               onValueChange={([v]) => setMaxPerChunk(v)}
-              className="mt-2"
             />
+            <div className="flex justify-between text-xs text-muted-foreground mt-1">
+              <span>1</span><span>10</span>
+            </div>
           </div>
 
           <div>
-            <Label className="text-sm">Chunk Size (tokens): {targetTokens}</Label>
+            <div className="flex items-center justify-between mb-2">
+              <Label className="text-sm text-foreground">Chunk Size (tokens)</Label>
+              <span className="text-sm font-semibold text-primary tabular-nums">{targetTokens}</span>
+            </div>
             <Slider
-              min={50}
-              max={1000}
-              step={50}
+              min={50} max={1000} step={50}
               value={[targetTokens]}
               onValueChange={([v]) => setTargetTokens(v)}
-              className="mt-2"
             />
+            <div className="flex justify-between text-xs text-muted-foreground mt-1">
+              <span>50</span><span>1000</span>
+            </div>
           </div>
 
           <div>
-            <Label className="text-sm">Min Quality Score: {(scoreThreshold * 100).toFixed(0)}%</Label>
+            <div className="flex items-center justify-between mb-2">
+              <Label className="text-sm text-foreground">Min Quality Score</Label>
+              <span className="text-sm font-semibold text-primary tabular-nums">{(scoreThreshold * 100).toFixed(0)}%</span>
+            </div>
             <Slider
-              min={0}
-              max={1}
-              step={0.05}
+              min={0} max={1} step={0.05}
               value={[scoreThreshold]}
               onValueChange={([v]) => setScoreThreshold(v)}
-              className="mt-2"
             />
+            <div className="flex justify-between text-xs text-muted-foreground mt-1">
+              <span>0%</span><span>100%</span>
+            </div>
           </div>
         </div>
 
         {error && (
-          <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+          <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3">
             {error}
           </div>
         )}
 
         <Button
           type="submit"
-          className="w-full gap-2 bg-indigo-600 hover:bg-indigo-700"
+          className="w-full gap-2 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold py-5"
           disabled={mutation.isPending}
         >
           <Zap className="w-4 h-4" />

@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { listRuns } from "@/lib/pipeline-api";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { Plus, RefreshCw } from "lucide-react";
+import { Plus, RefreshCw, Zap } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 export default function RunsPage() {
@@ -18,12 +18,14 @@ export default function RunsPage() {
     },
   });
 
+  const sortedRuns = runs ? [...runs].reverse() : [];
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Pipeline Runs</h1>
-          <p className="text-sm text-gray-500 mt-1">Monitor and manage your dataset generation runs</p>
+          <h1 className="text-2xl font-bold text-foreground">Pipeline Runs</h1>
+          <p className="text-sm text-muted-foreground mt-1">Monitor and manage your dataset generation runs</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -31,14 +33,14 @@ export default function RunsPage() {
             size="sm"
             onClick={() => refetch()}
             disabled={isFetching}
-            className="gap-1"
+            className="gap-1.5 border-border text-muted-foreground hover:text-foreground"
           >
-            <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} />
             Refresh
           </Button>
           <Link href="/new">
-            <Button size="sm" className="gap-1 bg-indigo-600 hover:bg-indigo-700">
-              <Plus className="w-4 h-4" />
+            <Button size="sm" className="gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90">
+              <Plus className="w-3.5 h-3.5" />
               New Run
             </Button>
           </Link>
@@ -46,59 +48,71 @@ export default function RunsPage() {
       </div>
 
       {isLoading ? (
-        <div className="space-y-3">
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-20 rounded-xl bg-gray-100 animate-pulse" />
+        <div className="space-y-2">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-16 rounded-xl bg-card animate-pulse border border-card-border" />
           ))}
         </div>
       ) : !runs || runs.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-indigo-50 flex items-center justify-center mb-4">
-            <Plus className="w-8 h-8 text-indigo-400" />
+          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+            <Zap className="w-8 h-8 text-primary" />
           </div>
-          <h2 className="text-lg font-semibold text-gray-900">No runs yet</h2>
-          <p className="text-sm text-gray-500 mt-1 mb-4">Start your first dataset generation run</p>
+          <h2 className="text-lg font-semibold text-foreground">No runs yet</h2>
+          <p className="text-sm text-muted-foreground mt-1 mb-4">Start your first dataset generation run</p>
           <Link href="/new">
-            <Button className="bg-indigo-600 hover:bg-indigo-700">Create New Run</Button>
+            <Button className="bg-primary text-primary-foreground hover:bg-primary/90">Create New Run</Button>
           </Link>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        <div className="bg-card rounded-xl border border-card-border overflow-hidden">
+          <table className="min-w-full divide-y divide-border">
+            <thead className="bg-muted/30">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Run</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Records</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                <th className="px-6 py-3"></th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Run</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Records</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Ingest</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Val. Pass</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Avg Score</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Created</th>
+                <th className="px-5 py-3" />
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-100">
-              {[...runs].reverse().map((run) => (
-                <tr key={run.run_id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="text-sm font-medium text-gray-900">{run.run_name}</div>
-                    <div className="text-xs text-gray-400 font-mono">{run.run_id}</div>
+            <tbody className="divide-y divide-border">
+              {sortedRuns.map((run) => (
+                <tr key={run.run_id} className="hover:bg-accent/40 transition-colors">
+                  <td className="px-5 py-4">
+                    <div className="text-sm font-medium text-foreground">{run.run_name}</div>
+                    <div className="text-xs text-muted-foreground font-mono mt-0.5">{run.run_id}</div>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-5 py-4">
                     <StatusBadge status={run.status} />
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-700">
-                    {run.metrics?.total_records ?? "—"}
+                  <td className="px-5 py-4 text-sm text-foreground tabular-nums">
+                    {run.metrics?.total_records ?? <span className="text-muted-foreground">—</span>}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-700">
+                  <td className="px-5 py-4 text-sm tabular-nums">
+                    {run.metrics?.ingest_success_rate != null
+                      ? <span className="text-foreground">{(run.metrics.ingest_success_rate * 100).toFixed(0)}%</span>
+                      : <span className="text-muted-foreground">—</span>}
+                  </td>
+                  <td className="px-5 py-4 text-sm tabular-nums">
+                    {run.metrics?.validation_pass_rate != null
+                      ? <span className="text-foreground">{(run.metrics.validation_pass_rate * 100).toFixed(0)}%</span>
+                      : <span className="text-muted-foreground">—</span>}
+                  </td>
+                  <td className="px-5 py-4 text-sm tabular-nums">
                     {run.metrics?.avg_final_score != null
-                      ? (run.metrics.avg_final_score * 100).toFixed(0) + "%"
-                      : "—"}
+                      ? <span className="text-foreground">{(run.metrics.avg_final_score * 100).toFixed(0)}%</span>
+                      : <span className="text-muted-foreground">—</span>}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
+                  <td className="px-5 py-4 text-sm text-muted-foreground whitespace-nowrap">
                     {formatDistanceToNow(new Date(run.created_at), { addSuffix: true })}
                   </td>
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-5 py-4 text-right">
                     <Link href={`/runs/${run.run_id}`}>
-                      <Button variant="ghost" size="sm" className="text-indigo-600 hover:text-indigo-700">
+                      <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80 hover:bg-primary/10 text-xs">
                         View →
                       </Button>
                     </Link>

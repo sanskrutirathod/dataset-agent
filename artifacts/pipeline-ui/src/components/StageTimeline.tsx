@@ -1,4 +1,4 @@
-import { CheckCircle, XCircle, Clock, Loader2 } from "lucide-react";
+import { CheckCircle, Clock, Loader2 } from "lucide-react";
 import type { StageMetrics } from "@/lib/pipeline-api";
 
 const STAGE_LABELS: Record<string, string> = {
@@ -34,45 +34,47 @@ export function StageTimeline({ stageMetrics, status }: StageTimelineProps) {
         {ALL_STAGES.map((stage, idx) => {
           const metric = stageMetrics.find((m) => m.stage === stage);
           const isDone = completed.has(stage);
-          const isActive = !isDone && lastCompleted === ALL_STAGES[idx - 1] && (status === "running");
+          const isActive = !isDone && lastCompleted === ALL_STAGES[idx - 1] && status === "running";
           const isLast = idx === ALL_STAGES.length - 1;
 
           return (
             <li key={stage}>
-              <div className="relative pb-8">
+              <div className="relative pb-7">
                 {!isLast && (
                   <span
-                    className={`absolute left-4 top-4 -ml-px h-full w-0.5 ${isDone ? "bg-indigo-200" : "bg-gray-200"}`}
+                    className={`absolute left-4 top-4 -ml-px h-full w-0.5 ${
+                      isDone ? "bg-primary/30" : "bg-border"
+                    }`}
                     aria-hidden="true"
                   />
                 )}
                 <div className="relative flex items-start space-x-3">
                   <div className="relative">
                     {isDone ? (
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 ring-4 ring-white">
-                        <CheckCircle className="h-5 w-5 text-indigo-600" />
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 ring-2 ring-background ring-offset-0">
+                        <CheckCircle className="h-4 w-4 text-primary" />
                       </span>
                     ) : isActive ? (
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 ring-4 ring-white">
-                        <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-500/10 ring-2 ring-background">
+                        <Loader2 className="h-4 w-4 text-blue-400 animate-spin" />
                       </span>
                     ) : (
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 ring-4 ring-white">
-                        <Clock className="h-5 w-5 text-gray-400" />
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-muted ring-2 ring-background">
+                        <Clock className="h-4 w-4 text-muted-foreground" />
                       </span>
                     )}
                   </div>
                   <div className="min-w-0 flex-1 pt-1.5">
                     <div className="flex items-center justify-between">
-                      <p className={`text-sm font-medium ${isDone ? "text-gray-900" : "text-gray-400"}`}>
+                      <p className={`text-sm font-medium ${isDone ? "text-foreground" : "text-muted-foreground"}`}>
                         {STAGE_LABELS[stage] ?? stage}
                       </p>
-                      {metric && (
-                        <span className="text-xs text-gray-400">{fmt(metric.latency_ms)}</span>
+                      {metric && metric.latency_ms > 0 && (
+                        <span className="text-xs text-muted-foreground tabular-nums">{fmt(metric.latency_ms)}</span>
                       )}
                     </div>
                     {metric && (
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-muted-foreground mt-0.5">
                         {metric.input_count} in → {metric.output_count} out
                         {metric.notes ? ` · ${metric.notes}` : ""}
                       </p>

@@ -7,20 +7,28 @@ interface MetricCardProps {
   color?: "default" | "green" | "blue" | "yellow" | "red";
 }
 
-const COLOR_STYLES = {
-  default: "bg-white border-gray-200",
-  green: "bg-green-50 border-green-200",
-  blue: "bg-blue-50 border-blue-200",
-  yellow: "bg-yellow-50 border-yellow-200",
-  red: "bg-red-50 border-red-200",
+const COLOR_STYLES: Record<string, string> = {
+  default: "bg-card border-card-border",
+  green:   "bg-emerald-500/5 border-emerald-500/20",
+  blue:    "bg-blue-500/5 border-blue-500/20",
+  yellow:  "bg-amber-500/5 border-amber-500/20",
+  red:     "bg-red-500/5 border-red-500/20",
+};
+
+const VALUE_STYLES: Record<string, string> = {
+  default: "text-foreground",
+  green:   "text-emerald-400",
+  blue:    "text-blue-400",
+  yellow:  "text-amber-400",
+  red:     "text-red-400",
 };
 
 export function MetricCard({ label, value, sub, color = "default" }: MetricCardProps) {
   return (
     <div className={cn("rounded-xl border p-4", COLOR_STYLES[color])}>
-      <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-gray-900">{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-gray-500">{sub}</p>}
+      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{label}</p>
+      <p className={cn("mt-1 text-2xl font-bold tabular-nums", VALUE_STYLES[color])}>{value}</p>
+      {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
     </div>
   );
 }
