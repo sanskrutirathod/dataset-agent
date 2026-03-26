@@ -94,3 +94,27 @@ Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHea
 ### `scripts` (`@workspace/scripts`)
 
 Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+
+### `artifacts/pipeline-ui` (`@workspace/pipeline-ui`)
+
+React + Vite dashboard for the WEBSPACEAI Dataset Engine. Served at path `/`.
+
+- Pages: `RunsPage` (list), `NewRunPage` (form), `RunDetailPage` (detail/download)
+- API calls go to `/pipeline/*` which are proxied from the Node.js API server to the Python FastAPI service
+- Uses Recharts for stage latency bar charts, Shadcn/Radix for UI
+
+### `artifacts/pipeline-api` (Python FastAPI)
+
+Production-grade AI training data factory. Runs on port 8000. Routes are all under `/pipeline/`.
+
+**8-stage pipeline**: ingest (trafilatura + bs4) → clean → dedup (rapidfuzz) → chunk (tiktoken sliding window) → generate (OpenAI LLM) → validate → score (heuristic weighted) → export (JSONL/CSV/report)
+
+- SQLite metadata store at `data/pipeline.db`
+- Per-run data versioned at `data/versions/{run_id}/`
+- AI model: `gpt-5-mini` via Replit AI Integration (OpenAI-compatible proxy)
+- Runs as background task; status polled via GET `/pipeline/runs/{run_id}`
+- **Note**: The model does not support `temperature` parameter — must use default only
+
+### Node.js API → Python Pipeline Proxy
+
+`artifacts/api-server/src/routes/pipeline-proxy.ts` proxies all `/api/pipeline/*` requests to `localhost:8000/pipeline/*`

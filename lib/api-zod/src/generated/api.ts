@@ -14,3 +14,206 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * Start a new dataset pipeline run with the given config
+ * @summary Start pipeline run
+ */
+export const startPipelineRunBodyConfigRunNameDefault = `default_run`;
+export const startPipelineRunBodyConfigChunkTargetTokensDefault = 600;
+export const startPipelineRunBodyConfigChunkOverlapDefault = 80;
+export const startPipelineRunBodyConfigGenerationModeDefault = `qa`;
+export const startPipelineRunBodyConfigGenerationTemperatureDefault = 0.2;
+export const startPipelineRunBodyConfigGenerationMaxRecordsPerChunkDefault = 1;
+export const startPipelineRunBodyConfigValidationMinLengthDefault = 50;
+export const startPipelineRunBodyConfigValidationMaxLengthDefault = 4096;
+export const startPipelineRunBodyConfigValidationScoreThresholdDefault = 0.75;
+export const startPipelineRunBodyConfigValidationGroundingMinOverlapDefault = 0.1;
+export const startPipelineRunBodyConfigLimitsMaxRecordsDefault = 5000;
+export const startPipelineRunBodyConfigLimitsMaxPerSourceDefault = 1000;
+
+export const StartPipelineRunBody = zod.object({
+  config: zod.object({
+    run_name: zod.string().default(startPipelineRunBodyConfigRunNameDefault),
+    sources: zod
+      .array(
+        zod.object({
+          type: zod.enum(["url", "text", "file"]),
+          value: zod.string(),
+          title: zod.string().optional(),
+        }),
+      )
+      .optional(),
+    chunk: zod
+      .object({
+        target_tokens: zod
+          .number()
+          .default(startPipelineRunBodyConfigChunkTargetTokensDefault),
+        overlap: zod
+          .number()
+          .default(startPipelineRunBodyConfigChunkOverlapDefault),
+      })
+      .optional(),
+    generation: zod
+      .object({
+        mode: zod
+          .enum(["qa", "instruction", "summary", "chat"])
+          .default(startPipelineRunBodyConfigGenerationModeDefault),
+        temperature: zod
+          .number()
+          .default(startPipelineRunBodyConfigGenerationTemperatureDefault),
+        max_records_per_chunk: zod
+          .number()
+          .default(
+            startPipelineRunBodyConfigGenerationMaxRecordsPerChunkDefault,
+          ),
+      })
+      .optional(),
+    validation: zod
+      .object({
+        min_length: zod
+          .number()
+          .default(startPipelineRunBodyConfigValidationMinLengthDefault),
+        max_length: zod
+          .number()
+          .default(startPipelineRunBodyConfigValidationMaxLengthDefault),
+        score_threshold: zod
+          .number()
+          .default(startPipelineRunBodyConfigValidationScoreThresholdDefault),
+        grounding_min_overlap: zod
+          .number()
+          .default(
+            startPipelineRunBodyConfigValidationGroundingMinOverlapDefault,
+          ),
+      })
+      .optional(),
+    limits: zod
+      .object({
+        max_records: zod
+          .number()
+          .default(startPipelineRunBodyConfigLimitsMaxRecordsDefault),
+        max_per_source: zod
+          .number()
+          .default(startPipelineRunBodyConfigLimitsMaxPerSourceDefault),
+      })
+      .optional(),
+  }),
+});
+
+export const StartPipelineRunResponse = zod.object({
+  run_id: zod.string(),
+  status: zod.enum(["pending", "running", "completed", "failed", "partial"]),
+  message: zod.string().optional(),
+});
+
+/**
+ * List all pipeline runs
+ * @summary List pipeline runs
+ */
+export const ListPipelineRunsResponseItem = zod.object({
+  run_id: zod.string(),
+  run_name: zod.string(),
+  status: zod.enum(["pending", "running", "completed", "failed", "partial"]),
+  created_at: zod.string(),
+  updated_at: zod.string(),
+  metrics: zod
+    .object({
+      ingest_success_rate: zod.number().optional(),
+      dedup_ratio: zod.number().optional(),
+      avg_chunk_tokens: zod.number().optional(),
+      generation_yield: zod.number().optional(),
+      validation_pass_rate: zod.number().optional(),
+      avg_final_score: zod.number().optional(),
+      total_records: zod.number().optional(),
+      drop_count: zod.number().optional(),
+    })
+    .optional(),
+  stage_metrics: zod
+    .array(
+      zod.object({
+        stage: zod.string().optional(),
+        input_count: zod.number().optional(),
+        output_count: zod.number().optional(),
+        latency_ms: zod.number().optional(),
+        notes: zod.string().optional(),
+      }),
+    )
+    .optional(),
+});
+export const ListPipelineRunsResponse = zod.array(ListPipelineRunsResponseItem);
+
+/**
+ * Get details for a specific pipeline run
+ * @summary Get pipeline run
+ */
+export const GetPipelineRunParams = zod.object({
+  runId: zod.coerce.string(),
+});
+
+export const GetPipelineRunResponse = zod.object({
+  run_id: zod.string(),
+  run_name: zod.string(),
+  status: zod.enum(["pending", "running", "completed", "failed", "partial"]),
+  created_at: zod.string(),
+  updated_at: zod.string(),
+  config: zod.record(zod.string(), zod.unknown()).optional(),
+  metrics: zod
+    .object({
+      ingest_success_rate: zod.number().optional(),
+      dedup_ratio: zod.number().optional(),
+      avg_chunk_tokens: zod.number().optional(),
+      generation_yield: zod.number().optional(),
+      validation_pass_rate: zod.number().optional(),
+      avg_final_score: zod.number().optional(),
+      total_records: zod.number().optional(),
+      drop_count: zod.number().optional(),
+    })
+    .optional(),
+  stage_metrics: zod
+    .array(
+      zod.object({
+        stage: zod.string().optional(),
+        input_count: zod.number().optional(),
+        output_count: zod.number().optional(),
+        latency_ms: zod.number().optional(),
+        notes: zod.string().optional(),
+      }),
+    )
+    .optional(),
+  error: zod.string().nullish(),
+});
+
+/**
+ * Download the JSONL, CSV, or Markdown report for a completed run
+ * @summary Download dataset export
+ */
+export const DownloadDatasetParams = zod.object({
+  runId: zod.coerce.string(),
+});
+
+export const downloadDatasetQueryFormatDefault = `jsonl`;
+
+export const DownloadDatasetQueryParams = zod.object({
+  format: zod
+    .enum(["jsonl", "csv", "report"])
+    .default(downloadDatasetQueryFormatDefault),
+});
+
+/**
+ * Ingest URL or text sources and return source IDs
+ * @summary Ingest sources
+ */
+export const IngestSourcesBody = zod.object({
+  sources: zod.array(
+    zod.object({
+      type: zod.enum(["url", "text", "file"]),
+      value: zod.string(),
+      title: zod.string().optional(),
+    }),
+  ),
+});
+
+export const IngestSourcesResponse = zod.object({
+  source_ids: zod.array(zod.string()),
+  count: zod.number(),
+});

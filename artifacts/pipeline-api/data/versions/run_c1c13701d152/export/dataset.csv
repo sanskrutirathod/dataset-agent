@@ -1,0 +1,2 @@
+id,type,instruction,input,output,score_relevance,score_clarity,score_grounding,score_diversity,score_final,source_id,chunk_id
+ds_53ebe293941e,qa,What does machine learning involve?,,Training algorithms on data to make predictions or decisions.,0.0,0.6,0.4487,1.0,0.4846,src_8ed5d8fa1a0b,chk_c48d35da5bdd

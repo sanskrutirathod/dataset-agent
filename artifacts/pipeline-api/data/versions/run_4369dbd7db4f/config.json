@@ -1,0 +1,29 @@
+{
+  "run_name": "test_run_1",
+  "sources": [
+    {
+      "type": "text",
+      "value": "Machine learning is a subset of artificial intelligence. It involves training algorithms on data to make predictions or decisions. Common algorithms include linear regression, decision trees, and neural networks. Deep learning is a subset of machine learning that uses multi-layer neural networks. These networks can learn complex patterns from large amounts of data. Natural language processing allows computers to understand human language. Computer vision enables machines to interpret visual information from cameras and images.",
+      "title": "ML Overview"
+    }
+  ],
+  "chunk": {
+    "target_tokens": 100,
+    "overlap": 20
+  },
+  "generation": {
+    "mode": "qa",
+    "temperature": 0.2,
+    "max_records_per_chunk": 2
+  },
+  "validation": {
+    "min_length": 20,
+    "max_length": 4096,
+    "score_threshold": 0.3,
+    "grounding_min_overlap": 0.1
+  },
+  "limits": {
+    "max_records": 10,
+    "max_per_source": 10
+  }
+}

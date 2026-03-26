@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: pipeline
+    description: Dataset pipeline operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,125 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /pipeline/run:
+    post:
+      operationId: startPipelineRun
+      tags: [pipeline]
+      summary: Start pipeline run
+      description: Start a new dataset pipeline run with the given config
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PipelineRunRequest"
+      responses:
+        "200":
+          description: Run started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PipelineRunResponse"
+
+  /pipeline/runs:
+    get:
+      operationId: listPipelineRuns
+      tags: [pipeline]
+      summary: List pipeline runs
+      description: List all pipeline runs
+      responses:
+        "200":
+          description: List of runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RunListItem"
+
+  /pipeline/runs/{runId}:
+    get:
+      operationId: getPipelineRun
+      tags: [pipeline]
+      summary: Get pipeline run
+      description: Get details for a specific pipeline run
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Run details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunDetail"
+        "404":
+          description: Run not found
+
+  /pipeline/runs/{runId}/download:
+    get:
+      operationId: downloadDataset
+      tags: [pipeline]
+      summary: Download dataset export
+      description: Download the JSONL, CSV, or Markdown report for a completed run
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [jsonl, csv, report]
+            default: jsonl
+      responses:
+        "200":
+          description: File download
+          content:
+            application/x-ndjson:
+              schema:
+                type: string
+                format: binary
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            text/markdown:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Run or export not found
+        "409":
+          description: Run not complete
+
+  /pipeline/ingest:
+    post:
+      operationId: ingestSources
+      tags: [pipeline]
+      summary: Ingest sources
+      description: Ingest URL or text sources and return source IDs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IngestRequest"
+      responses:
+        "200":
+          description: Ingestion result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +155,226 @@ components:
       required:
         - status
 
+    SourceConfig:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [url, text, file]
+        value:
+          type: string
+        title:
+          type: string
+      required:
+        - type
+        - value
+
+    ChunkConfig:
+      type: object
+      properties:
+        target_tokens:
+          type: integer
+          default: 600
+        overlap:
+          type: integer
+          default: 80
+
+    GenerationConfig:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum: [qa, instruction, summary, chat]
+          default: qa
+        temperature:
+          type: number
+          default: 0.2
+        max_records_per_chunk:
+          type: integer
+          default: 1
+
+    ValidationConfig:
+      type: object
+      properties:
+        min_length:
+          type: integer
+          default: 50
+        max_length:
+          type: integer
+          default: 4096
+        score_threshold:
+          type: number
+          default: 0.75
+        grounding_min_overlap:
+          type: number
+          default: 0.1
+
+    LimitsConfig:
+      type: object
+      properties:
+        max_records:
+          type: integer
+          default: 5000
+        max_per_source:
+          type: integer
+          default: 1000
+
+    PipelineConfig:
+      type: object
+      properties:
+        run_name:
+          type: string
+          default: default_run
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/SourceConfig"
+        chunk:
+          $ref: "#/components/schemas/ChunkConfig"
+        generation:
+          $ref: "#/components/schemas/GenerationConfig"
+        validation:
+          $ref: "#/components/schemas/ValidationConfig"
+        limits:
+          $ref: "#/components/schemas/LimitsConfig"
+      required:
+        - run_name
+
+    PipelineRunRequest:
+      type: object
+      properties:
+        config:
+          $ref: "#/components/schemas/PipelineConfig"
+      required:
+        - config
+
+    PipelineRunResponse:
+      type: object
+      properties:
+        run_id:
+          type: string
+        status:
+          type: string
+          enum: [pending, running, completed, failed, partial]
+        message:
+          type: string
+      required:
+        - run_id
+        - status
+
+    RunMetrics:
+      type: object
+      properties:
+        ingest_success_rate:
+          type: number
+        dedup_ratio:
+          type: number
+        avg_chunk_tokens:
+          type: number
+        generation_yield:
+          type: number
+        validation_pass_rate:
+          type: number
+        avg_final_score:
+          type: number
+        total_records:
+          type: integer
+        drop_count:
+          type: integer
+
+    StageMetrics:
+      type: object
+      properties:
+        stage:
+          type: string
+        input_count:
+          type: integer
+        output_count:
+          type: integer
+        latency_ms:
+          type: number
+        notes:
+          type: string
+
+    RunListItem:
+      type: object
+      properties:
+        run_id:
+          type: string
+        run_name:
+          type: string
+        status:
+          type: string
+          enum: [pending, running, completed, failed, partial]
+        created_at:
+          type: string
+        updated_at:
+          type: string
+        metrics:
+          $ref: "#/components/schemas/RunMetrics"
+        stage_metrics:
+          type: array
+          items:
+            $ref: "#/components/schemas/StageMetrics"
+      required:
+        - run_id
+        - run_name
+        - status
+        - created_at
+        - updated_at
+
+    RunDetail:
+      type: object
+      properties:
+        run_id:
+          type: string
+        run_name:
+          type: string
+        status:
+          type: string
+          enum: [pending, running, completed, failed, partial]
+        created_at:
+          type: string
+        updated_at:
+          type: string
+        config:
+          type: object
+          additionalProperties: true
+        metrics:
+          $ref: "#/components/schemas/RunMetrics"
+        stage_metrics:
+          type: array
+          items:
+            $ref: "#/components/schemas/StageMetrics"
+        error:
+          type: string
+          nullable: true
+      required:
+        - run_id
+        - run_name
+        - status
+        - created_at
+        - updated_at
+
+    IngestRequest:
+      type: object
+      properties:
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/SourceConfig"
+      required:
+        - sources
+
+    IngestResponse:
+      type: object
+      properties:
+        source_ids:
+          type: array
+          items:
+            type: string
+        count:
+          type: integer
+      required:
+        - source_ids
+        - count

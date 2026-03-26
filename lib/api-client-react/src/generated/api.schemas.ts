@@ -8,3 +8,168 @@
 export interface HealthStatus {
   status: string;
 }
+
+export type SourceConfigType =
+  (typeof SourceConfigType)[keyof typeof SourceConfigType];
+
+export const SourceConfigType = {
+  url: "url",
+  text: "text",
+  file: "file",
+} as const;
+
+export interface SourceConfig {
+  type: SourceConfigType;
+  value: string;
+  title?: string;
+}
+
+export interface ChunkConfig {
+  target_tokens?: number;
+  overlap?: number;
+}
+
+export type GenerationConfigMode =
+  (typeof GenerationConfigMode)[keyof typeof GenerationConfigMode];
+
+export const GenerationConfigMode = {
+  qa: "qa",
+  instruction: "instruction",
+  summary: "summary",
+  chat: "chat",
+} as const;
+
+export interface GenerationConfig {
+  mode?: GenerationConfigMode;
+  temperature?: number;
+  max_records_per_chunk?: number;
+}
+
+export interface ValidationConfig {
+  min_length?: number;
+  max_length?: number;
+  score_threshold?: number;
+  grounding_min_overlap?: number;
+}
+
+export interface LimitsConfig {
+  max_records?: number;
+  max_per_source?: number;
+}
+
+export interface PipelineConfig {
+  run_name: string;
+  sources?: SourceConfig[];
+  chunk?: ChunkConfig;
+  generation?: GenerationConfig;
+  validation?: ValidationConfig;
+  limits?: LimitsConfig;
+}
+
+export interface PipelineRunRequest {
+  config: PipelineConfig;
+}
+
+export type PipelineRunResponseStatus =
+  (typeof PipelineRunResponseStatus)[keyof typeof PipelineRunResponseStatus];
+
+export const PipelineRunResponseStatus = {
+  pending: "pending",
+  running: "running",
+  completed: "completed",
+  failed: "failed",
+  partial: "partial",
+} as const;
+
+export interface PipelineRunResponse {
+  run_id: string;
+  status: PipelineRunResponseStatus;
+  message?: string;
+}
+
+export interface RunMetrics {
+  ingest_success_rate?: number;
+  dedup_ratio?: number;
+  avg_chunk_tokens?: number;
+  generation_yield?: number;
+  validation_pass_rate?: number;
+  avg_final_score?: number;
+  total_records?: number;
+  drop_count?: number;
+}
+
+export interface StageMetrics {
+  stage?: string;
+  input_count?: number;
+  output_count?: number;
+  latency_ms?: number;
+  notes?: string;
+}
+
+export type RunListItemStatus =
+  (typeof RunListItemStatus)[keyof typeof RunListItemStatus];
+
+export const RunListItemStatus = {
+  pending: "pending",
+  running: "running",
+  completed: "completed",
+  failed: "failed",
+  partial: "partial",
+} as const;
+
+export interface RunListItem {
+  run_id: string;
+  run_name: string;
+  status: RunListItemStatus;
+  created_at: string;
+  updated_at: string;
+  metrics?: RunMetrics;
+  stage_metrics?: StageMetrics[];
+}
+
+export type RunDetailStatus =
+  (typeof RunDetailStatus)[keyof typeof RunDetailStatus];
+
+export const RunDetailStatus = {
+  pending: "pending",
+  running: "running",
+  completed: "completed",
+  failed: "failed",
+  partial: "partial",
+} as const;
+
+export type RunDetailConfig = { [key: string]: unknown };
+
+export interface RunDetail {
+  run_id: string;
+  run_name: string;
+  status: RunDetailStatus;
+  created_at: string;
+  updated_at: string;
+  config?: RunDetailConfig;
+  metrics?: RunMetrics;
+  stage_metrics?: StageMetrics[];
+  error?: string | null;
+}
+
+export interface IngestRequest {
+  sources: SourceConfig[];
+}
+
+export interface IngestResponse {
+  source_ids: string[];
+  count: number;
+}
+
+export type DownloadDatasetParams = {
+  format?: DownloadDatasetFormat;
+};
+
+export type DownloadDatasetFormat =
+  (typeof DownloadDatasetFormat)[keyof typeof DownloadDatasetFormat];
+
+export const DownloadDatasetFormat = {
+  jsonl: "jsonl",
+  csv: "csv",
+  report: "report",
+} as const;
