@@ -140,7 +140,7 @@ def run_export(
     dpo_records = [r for r in records if r.type == "distillation_dpo" and r.chosen and r.rejected]
     if dpo_records:
         dpo_path = version_dir / "dataset_dpo.jsonl"
-        export_dpo_jsonl(records, dpo_path)
+        export_dpo_jsonl(dpo_records, dpo_path)
         result["dpo_jsonl"] = str(dpo_path)
 
     logger.info(

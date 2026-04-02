@@ -22,6 +22,7 @@ export interface GenerationConfig {
   max_records_per_chunk?: number;
   distillation_mode?: "cot" | "dpo" | "sft";
   teacher_model?: string;
+  temperature?: number;
 }
 
 export interface PipelineConfig {
