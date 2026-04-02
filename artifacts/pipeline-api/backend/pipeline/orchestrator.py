@@ -93,9 +93,11 @@ def run_pipeline(run_id: str, config: PipelineConfig) -> None:
     try:
         # Stage 1: Ingest
         raw_dir = run_dir / "raw"
+        ingest_notes: list[str] = []
         if not _is_done(run_dir, "ingest"):
             sources, ms = timed_stage(
-                "ingest", run_ingest, config.sources, raw_dir
+                "ingest", run_ingest, config.sources, raw_dir,
+                lambda note: ingest_notes.append(note)
             )
             _mark_done(run_dir, "ingest")
         else:
@@ -106,6 +108,7 @@ def run_pipeline(run_id: str, config: PipelineConfig) -> None:
             input_count=len(config.sources),
             output_count=len(sources),
             latency_ms=ms,
+            notes="; ".join(ingest_notes) if ingest_notes else "",
         ))
         logger.info(f"[{run_id}] ingest: {len(sources)} sources")
 

@@ -1,14 +1,25 @@
 import { apiFetch } from "./api";
 
+export interface CrawlSourceConfig {
+  type: "crawl";
+  seed_url: string;
+  max_depth: number;
+  max_pages: number;
+  allowed_domains: string[];
+  delay_ms: number;
+}
+
 export interface SourceConfig {
   type: "url" | "text" | "file";
   value: string;
   title?: string;
 }
 
+export type AnySourceConfig = SourceConfig | CrawlSourceConfig;
+
 export interface PipelineConfig {
   run_name: string;
-  sources: SourceConfig[];
+  sources: AnySourceConfig[];
   chunk?: { target_tokens?: number; overlap?: number };
   generation?: { mode?: "qa" | "instruction" | "summary" | "chat"; max_records_per_chunk?: number };
   validation?: { min_length?: number; max_length?: number; score_threshold?: number; grounding_min_overlap?: number };

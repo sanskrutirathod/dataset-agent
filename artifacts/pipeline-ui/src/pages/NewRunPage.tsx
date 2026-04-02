@@ -2,34 +2,53 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { startPipelineRun } from "@/lib/pipeline-api";
-import type { PipelineConfig, SourceConfig } from "@/lib/pipeline-api";
+import type { PipelineConfig, AnySourceConfig } from "@/lib/pipeline-api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
-import { Plus, Trash2, Zap, ArrowLeft } from "lucide-react";
+import { Plus, Trash2, Zap, ArrowLeft, ChevronDown, ChevronUp } from "lucide-react";
 import { Link } from "wouter";
+
+type SourceType = "url" | "text" | "crawl";
 
 interface SourceEntry {
   id: string;
-  type: "url" | "text";
+  type: SourceType;
   value: string;
   title: string;
+  crawlMaxDepth: number;
+  crawlMaxPages: number;
+  crawlAllowedDomains: string;
+  crawlDelayMs: number;
+  crawlSettingsOpen: boolean;
 }
 
 function genId() {
   return Math.random().toString(36).slice(2, 8);
 }
 
+function defaultSource(): SourceEntry {
+  return {
+    id: genId(),
+    type: "text",
+    value: "",
+    title: "",
+    crawlMaxDepth: 2,
+    crawlMaxPages: 50,
+    crawlAllowedDomains: "",
+    crawlDelayMs: 500,
+    crawlSettingsOpen: false,
+  };
+}
+
 export default function NewRunPage() {
   const [, navigate] = useLocation();
 
   const [runName, setRunName] = useState("");
-  const [sources, setSources] = useState<SourceEntry[]>([
-    { id: genId(), type: "text", value: "", title: "" },
-  ]);
+  const [sources, setSources] = useState<SourceEntry[]>([defaultSource()]);
   const [genMode, setGenMode] = useState<"qa" | "instruction" | "summary" | "chat">("qa");
   const [maxRecords, setMaxRecords] = useState(100);
   const [maxPerChunk, setMaxPerChunk] = useState(3);
@@ -49,7 +68,7 @@ export default function NewRunPage() {
   });
 
   const addSource = () => {
-    setSources((prev) => [...prev, { id: genId(), type: "text", value: "", title: "" }]);
+    setSources((prev) => [...prev, defaultSource()]);
   };
 
   const removeSource = (id: string) => {
@@ -68,19 +87,42 @@ export default function NewRunPage() {
       setError("Run name is required.");
       return;
     }
-    const validSources = sources.filter((s) => s.value.trim());
+
+    const validSources = sources.filter((s) => {
+      if (s.type === "crawl") return s.value.trim().length > 0;
+      return s.value.trim().length > 0;
+    });
+
     if (validSources.length === 0) {
       setError("At least one source with content is required.");
       return;
     }
 
-    const config: PipelineConfig = {
-      run_name: runName.trim(),
-      sources: validSources.map((s) => ({
-        type: s.type,
+    const mappedSources: AnySourceConfig[] = validSources.map((s) => {
+      if (s.type === "crawl") {
+        const allowedDomains = s.crawlAllowedDomains
+          .split(",")
+          .map((d) => d.trim())
+          .filter(Boolean);
+        return {
+          type: "crawl" as const,
+          seed_url: s.value.trim(),
+          max_depth: s.crawlMaxDepth,
+          max_pages: s.crawlMaxPages,
+          allowed_domains: allowedDomains,
+          delay_ms: s.crawlDelayMs,
+        };
+      }
+      return {
+        type: s.type as "url" | "text",
         value: s.value.trim(),
         title: s.title.trim() || undefined,
-      } as SourceConfig)),
+      };
+    });
+
+    const config: PipelineConfig = {
+      run_name: runName.trim(),
+      sources: mappedSources,
       chunk: { target_tokens: targetTokens, overlap: chunkOverlap },
       generation: { mode: genMode, max_records_per_chunk: maxPerChunk },
       validation: { min_length: 20, score_threshold: scoreThreshold },
@@ -151,12 +193,13 @@ export default function NewRunPage() {
                     </button>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+
+                <div className={source.type === "crawl" ? "w-full" : "grid grid-cols-2 gap-3"}>
                   <div>
                     <Label className="text-xs text-muted-foreground">Type</Label>
                     <Select
                       value={source.type}
-                      onValueChange={(v) => updateSource(source.id, { type: v as "url" | "text" })}
+                      onValueChange={(v) => updateSource(source.id, { type: v as SourceType })}
                     >
                       <SelectTrigger className="mt-1.5 h-9 bg-background border-input text-foreground">
                         <SelectValue />
@@ -164,20 +207,24 @@ export default function NewRunPage() {
                       <SelectContent className="bg-card border-card-border">
                         <SelectItem value="text">Text</SelectItem>
                         <SelectItem value="url">URL</SelectItem>
+                        <SelectItem value="crawl">Crawl</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Title (optional)</Label>
-                    <Input
-                      value={source.title}
-                      onChange={(e) => updateSource(source.id, { title: e.target.value })}
-                      placeholder="Descriptive name"
-                      className="mt-1.5 h-9 bg-background border-input text-foreground placeholder:text-muted-foreground"
-                    />
-                  </div>
+                  {source.type !== "crawl" && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Title (optional)</Label>
+                      <Input
+                        value={source.title}
+                        onChange={(e) => updateSource(source.id, { title: e.target.value })}
+                        placeholder="Descriptive name"
+                        className="mt-1.5 h-9 bg-background border-input text-foreground placeholder:text-muted-foreground"
+                      />
+                    </div>
+                  )}
                 </div>
-                {source.type === "text" ? (
+
+                {source.type === "text" && (
                   <div>
                     <Label className="text-xs text-muted-foreground">Text Content</Label>
                     <Textarea
@@ -187,7 +234,9 @@ export default function NewRunPage() {
                       className="mt-1.5 min-h-28 text-sm bg-background border-input text-foreground placeholder:text-muted-foreground resize-y"
                     />
                   </div>
-                ) : (
+                )}
+
+                {source.type === "url" && (
                   <div>
                     <Label className="text-xs text-muted-foreground">URL</Label>
                     <Input
@@ -196,6 +245,80 @@ export default function NewRunPage() {
                       placeholder="https://example.com/article"
                       className="mt-1.5 bg-background border-input text-foreground placeholder:text-muted-foreground"
                     />
+                  </div>
+                )}
+
+                {source.type === "crawl" && (
+                  <div className="space-y-3">
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Seed URL</Label>
+                      <Input
+                        value={source.value}
+                        onChange={(e) => updateSource(source.id, { value: e.target.value })}
+                        placeholder="https://docs.example.com"
+                        className="mt-1.5 bg-background border-input text-foreground placeholder:text-muted-foreground"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        The crawler will follow internal links starting from this URL
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => updateSource(source.id, { crawlSettingsOpen: !source.crawlSettingsOpen })}
+                      className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {source.crawlSettingsOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      Crawler Settings
+                    </button>
+
+                    {source.crawlSettingsOpen && (
+                      <div className="space-y-3 border border-border rounded-md p-3 bg-background/30">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <Label className="text-xs text-muted-foreground">Max Depth</Label>
+                              <span className="text-xs font-semibold text-primary tabular-nums">{source.crawlMaxDepth}</span>
+                            </div>
+                            <Slider
+                              min={1} max={5} step={1}
+                              value={[source.crawlMaxDepth]}
+                              onValueChange={([v]) => updateSource(source.id, { crawlMaxDepth: v })}
+                            />
+                            <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                              <span>1</span><span>5</span>
+                            </div>
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <Label className="text-xs text-muted-foreground">Max Pages</Label>
+                              <span className="text-xs font-semibold text-primary tabular-nums">{source.crawlMaxPages}</span>
+                            </div>
+                            <Slider
+                              min={1} max={200} step={1}
+                              value={[source.crawlMaxPages]}
+                              onValueChange={([v]) => updateSource(source.id, { crawlMaxPages: v })}
+                            />
+                            <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                              <span>1</span><span>200</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Allowed Domains (optional)</Label>
+                          <Input
+                            value={source.crawlAllowedDomains}
+                            onChange={(e) => updateSource(source.id, { crawlAllowedDomains: e.target.value })}
+                            placeholder="docs.example.com, blog.example.com"
+                            className="mt-1.5 h-9 bg-background border-input text-foreground placeholder:text-muted-foreground text-xs"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Comma-separated list. Leave blank to restrict to the seed URL's domain.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

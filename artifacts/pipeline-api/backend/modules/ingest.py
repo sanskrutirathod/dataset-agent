@@ -162,6 +162,7 @@ def ingest_text(text: str, title: str = "text_input", uri: str = "") -> Source:
 def run_ingest(
     sources_config: list[dict[str, Any]],
     out_dir: Path,
+    stage_notes_callback=None,
 ) -> list[Source]:
     """Run ingestion for all sources, write raw JSONL, return Source list."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -173,15 +174,49 @@ def run_ingest(
             if not url:
                 continue
             source = ingest_url(url)
+            if source:
+                results.append(source)
+        elif src_type == "crawl":
+            from .crawler import crawl_site
+            seed_url = cfg.get("seed_url") or cfg.get("value", "")
+            if not seed_url:
+                continue
+            max_depth = int(cfg.get("max_depth", 2))
+            max_pages = int(cfg.get("max_pages", 50))
+            allowed_domains = cfg.get("allowed_domains") or []
+            delay_ms = int(cfg.get("delay_ms", 500))
+            from urllib.parse import urlparse
+            seed_domain = urlparse(seed_url).netloc
+
+            crawled_count = 0
+
+            def _progress(count: int, domain: str) -> None:
+                nonlocal crawled_count
+                crawled_count = count
+                logger.info(f"Crawl progress: {count} pages from {domain}")
+
+            crawled = crawl_site(
+                seed_url=seed_url,
+                max_depth=max_depth,
+                max_pages=max_pages,
+                allowed_domains=allowed_domains if allowed_domains else None,
+                delay_ms=delay_ms,
+                progress_callback=_progress,
+            )
+            results.extend(crawled)
+            note = f"{len(crawled)} pages from {seed_domain}"
+            if stage_notes_callback:
+                stage_notes_callback(note)
+            logger.info(f"Crawl ingest complete: {note}")
         elif src_type in ("text", "file"):
             text = cfg.get("value", "") or cfg.get("text", "")
             title = cfg.get("title", "text_input")
             source = ingest_text(text, title=title)
+            if source:
+                results.append(source)
         else:
             logger.warning(f"Unknown source type: {src_type}")
             continue
-        if source:
-            results.append(source)
 
     out_file = out_dir / "sources.jsonl"
     with out_file.open("w", encoding="utf-8") as f:
