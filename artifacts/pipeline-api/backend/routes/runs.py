@@ -1,27 +1,35 @@
 """Pipeline run routes."""
 from __future__ import annotations
+import asyncio
 import json
 import logging
 import os
+import shutil
 import threading
 from pathlib import Path
-from typing import Optional
+from typing import Optional, AsyncGenerator
 
 import yaml
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from ..schemas import (
     PipelineRunRequest, PipelineRunResponse, RunListItem, RunDetail,
     RunStatus, RunMetrics, StageMetrics, DownloadFormat, PipelineConfig,
     PushToHubRequest, HubStatusResponse,
 )
-from ..pipeline.db import create_run, get_run, list_runs, update_run_hf_status
+from ..pipeline.db import (
+    create_run, get_run, list_runs, update_run_hf_status, delete_run,
+    get_aggregate_stats, get_total_records_generated, get_avg_pipeline_latency_ms
+)
 from ..pipeline.orchestrator import run_pipeline
+from ..pipeline.job_queue import submit_job, get_status as get_queue_status
+from ..pipeline import event_bus
 from ..utils.ids import new_id
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/pipeline", tags=["pipeline"])
+v1_router = APIRouter(prefix="/api/v1", tags=["v1"])
 
 VERSIONS_BASE = Path("data/versions")
 
@@ -76,6 +84,17 @@ async def _parse_run_request(request: Request) -> PipelineConfig:
         raise HTTPException(status_code=422, detail=f"Config validation error: {e}")
 
 
+def _start_run(config: PipelineConfig) -> PipelineRunResponse:
+    run_id = new_id("run")
+    create_run(run_id, config.run_name, config.model_dump())
+    submit_job(run_pipeline, run_id, config)
+    return PipelineRunResponse(
+        run_id=run_id,
+        status=RunStatus.running,
+        message=f"Pipeline started with run_id={run_id}",
+    )
+
+
 @router.post("/run", response_model=PipelineRunResponse)
 async def start_pipeline_run(
     request: Request,
@@ -87,17 +106,7 @@ async def start_pipeline_run(
     `{config: {...}}` wrapper or the config object directly.
     """
     config = await _parse_run_request(request)
-    run_id = new_id("run")
-
-    create_run(run_id, config.run_name, config.model_dump())
-
-    background_tasks.add_task(run_pipeline, run_id, config)
-
-    return PipelineRunResponse(
-        run_id=run_id,
-        status=RunStatus.running,
-        message=f"Pipeline started with run_id={run_id}",
-    )
+    return _start_run(config)
 
 
 def _make_run_list_item(row: dict) -> RunListItem:
@@ -212,37 +221,29 @@ async def push_run_to_hub(run_id: str, body: PushToHubRequest) -> HubStatusRespo
     if not row:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
     if row["status"] not in (RunStatus.completed.value, RunStatus.partial.value):
-        raise HTTPException(status_code=409, detail="Run must be completed before pushing to Hub")
+        raise HTTPException(status_code=409, detail="Run is not complete yet")
 
     token = os.environ.get("HUGGINGFACE_TOKEN", "")
     if not token:
-        raise HTTPException(
-            status_code=400,
-            detail="HUGGINGFACE_TOKEN environment secret is not set. Please add it in your environment settings.",
-        )
+        raise HTTPException(status_code=400, detail="HUGGINGFACE_TOKEN environment variable not set")
 
     update_run_hf_status(run_id, "uploading")
-
-    t = threading.Thread(
-        target=_do_push_to_hub,
-        args=(run_id, body, token),
-        daemon=True,
-    )
+    t = threading.Thread(target=_do_push_to_hub, args=(run_id, body, token), daemon=True)
     t.start()
 
-    return HubStatusResponse(run_id=run_id, hf_status="uploading", hf_repo_url=None)
+    return HubStatusResponse(run_id=run_id, hf_status="uploading")
 
 
 @router.get("/runs/{run_id}/hub-status", response_model=HubStatusResponse)
-async def get_hub_status(run_id: str) -> HubStatusResponse:
+async def get_run_hub_status(run_id: str) -> HubStatusResponse:
     """Poll the HuggingFace upload status for a run."""
     row = get_run(run_id)
     if not row:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
     return HubStatusResponse(
         run_id=run_id,
-        hf_status=row.get("hf_status") or None,
-        hf_repo_url=row.get("hf_repo_url") or None,
+        hf_status=row.get("hf_status"),
+        hf_repo_url=row.get("hf_repo_url"),
     )
 
 
@@ -255,6 +256,7 @@ async def download_dataset(
     return _build_file_response(run_id, format)
 
 
+# ── datasets_router ──────────────────────────────────────────────────────────
 datasets_router = APIRouter(prefix="/datasets", tags=["datasets"])
 
 
@@ -282,6 +284,7 @@ async def download_dataset_by_id(
     return _build_file_response(dataset_id, format)
 
 
+# ── top-level runs_router (legacy alias) ─────────────────────────────────────
 runs_router = APIRouter(prefix="/runs", tags=["runs"])
 
 
@@ -298,3 +301,148 @@ async def get_run_alias(run_id: str) -> RunDetail:
     if not row:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
     return _make_run_detail(row)
+
+
+# ── /api/v1/ routes ──────────────────────────────────────────────────────────
+
+@v1_router.post(
+    "/runs",
+    response_model=PipelineRunResponse,
+    summary="Start a pipeline run",
+    description="Start a new dataset pipeline run. Accepts JSON or YAML body.",
+)
+async def v1_start_run(request: Request) -> PipelineRunResponse:
+    """Start a new dataset pipeline run (v1)."""
+    config = await _parse_run_request(request)
+    return _start_run(config)
+
+
+@v1_router.get(
+    "/runs",
+    response_model=list[RunListItem],
+    summary="List pipeline runs",
+)
+async def v1_list_runs() -> list[RunListItem]:
+    """List all pipeline runs."""
+    return [_make_run_list_item(row) for row in list_runs()]
+
+
+@v1_router.get(
+    "/runs/{run_id}",
+    response_model=RunDetail,
+    summary="Get run detail",
+)
+async def v1_get_run(run_id: str) -> RunDetail:
+    """Get details for a specific run."""
+    row = get_run(run_id)
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+    return _make_run_detail(row)
+
+
+@v1_router.delete(
+    "/runs/{run_id}",
+    summary="Delete a run",
+    description="Delete a run and its associated data on disk.",
+)
+async def v1_delete_run(run_id: str) -> dict:
+    """Delete a run record and its data directory."""
+    row = get_run(run_id)
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+
+    deleted = delete_run(run_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+
+    run_dir = VERSIONS_BASE / run_id
+    if run_dir.exists():
+        shutil.rmtree(run_dir, ignore_errors=True)
+
+    return {"deleted": True, "run_id": run_id}
+
+
+@v1_router.get(
+    "/runs/{run_id}/download",
+    summary="Download run dataset",
+)
+async def v1_download_run(
+    run_id: str,
+    format: DownloadFormat = DownloadFormat.jsonl,
+) -> FileResponse:
+    """Download the dataset export for a run."""
+    return _build_file_response(run_id, format)
+
+
+async def _sse_generator(run_id: str) -> AsyncGenerator[str, None]:
+    """Yield SSE-formatted events from the event bus for a run."""
+    q = event_bus.subscribe(run_id)
+    try:
+        while True:
+            try:
+                event = await asyncio.wait_for(q.get(), timeout=30.0)
+            except asyncio.TimeoutError:
+                yield ": keepalive\n\n"
+                continue
+
+            if event.get("event") == "done":
+                yield f"data: {json.dumps({'event': 'done'})}\n\n"
+                break
+
+            yield f"data: {json.dumps(event)}\n\n"
+    finally:
+        event_bus.unsubscribe(run_id, q)
+
+
+@v1_router.get(
+    "/runs/{run_id}/stream",
+    summary="Stream run stage events (SSE)",
+    description="Server-sent events stream for live pipeline stage completion updates.",
+    response_class=StreamingResponse,
+)
+async def v1_stream_run(run_id: str) -> StreamingResponse:
+    """SSE endpoint: stream stage_complete events for an active run."""
+    row = get_run(run_id)
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+
+    return StreamingResponse(
+        _sse_generator(run_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@v1_router.get(
+    "/metrics",
+    summary="System metrics",
+    description="Aggregate stats: total runs, completed runs, total records generated, avg pipeline latency.",
+)
+async def v1_metrics() -> dict:
+    """Return system-level aggregate metrics."""
+    stats = get_aggregate_stats()
+    total_records = get_total_records_generated()
+    avg_latency = get_avg_pipeline_latency_ms()
+    queue = get_queue_status()
+    return {
+        "total_runs": stats.get("total_runs", 0),
+        "completed_runs": stats.get("completed_runs", 0),
+        "running_runs": stats.get("running_runs", 0),
+        "failed_runs": stats.get("failed_runs", 0),
+        "total_records_generated": total_records,
+        "avg_pipeline_latency_ms": avg_latency,
+        "queue": queue,
+    }
+
+
+@v1_router.get(
+    "/queue",
+    summary="Job queue status",
+    description="Returns current queue depth and active worker count.",
+)
+async def v1_queue_status() -> dict:
+    """Return current job queue status."""
+    return get_queue_status()

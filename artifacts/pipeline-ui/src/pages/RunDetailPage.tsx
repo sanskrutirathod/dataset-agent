@@ -1,11 +1,22 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useParams, Link } from "wouter";
-import { getRun, downloadUrl, pushToHub, getHubStatus } from "@/lib/pipeline-api";
+import { useParams, Link, useLocation } from "wouter";
+import { getRun, downloadUrl, pushToHub, getHubStatus, deleteRun } from "@/lib/pipeline-api";
 import { StatusBadge } from "@/components/StatusBadge";
 import { StageTimeline } from "@/components/StageTimeline";
 import { MetricCard } from "@/components/MetricCard";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Download, Upload, ExternalLink, X, Eye, EyeOff } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { ArrowLeft, Download, Upload, ExternalLink, X, Eye, EyeOff, Trash2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useState, useEffect, useRef } from "react";
 import {
@@ -24,6 +35,11 @@ function getDistillationMode(config: Record<string, unknown> | undefined): strin
   if (!config) return null;
   const generation = config.generation as Record<string, unknown> | undefined;
   return (generation?.distillation_mode as string) || null;
+}
+
+function sseUrl(runId: string): string {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  return `${base}/api/v1/runs/${runId}/stream`;
 }
 
 function PushToHubPanel({ runId, onClose }: { runId: string; onClose: () => void }) {
@@ -210,7 +226,13 @@ function HubStatusCard({ runId, hfStatus, hfRepoUrl }: {
 
 export default function RunDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const [showPushPanel, setShowPushPanel] = useState(false);
+  const [sseActive, setSseActive] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const eventSourceRef = useRef<EventSource | null>(null);
 
   const { data: run, isLoading } = useQuery({
     queryKey: ["run", id],
@@ -219,9 +241,78 @@ export default function RunDetailPage() {
     refetchInterval: (query) => {
       const s = query.state.data?.status;
       const hf = query.state.data?.hf_status;
-      return s === "running" || s === "pending" || hf === "uploading" ? 3000 : false;
+      if (s === "running" || s === "pending") {
+        return sseActive ? false : 3000;
+      }
+      return hf === "uploading" ? 3000 : false;
     },
   });
+
+  useEffect(() => {
+    if (!id || !run) return;
+    const isActive = run.status === "running" || run.status === "pending";
+
+    if (!isActive) {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+        setSseActive(false);
+      }
+      return;
+    }
+
+    if (eventSourceRef.current) return;
+
+    if (typeof EventSource === "undefined") {
+      return;
+    }
+
+    const es = new EventSource(sseUrl(id));
+    eventSourceRef.current = es;
+    setSseActive(true);
+
+    es.onmessage = (e) => {
+      try {
+        const event = JSON.parse(e.data);
+        if (event.event === "done") {
+          queryClient.invalidateQueries({ queryKey: ["run", id] });
+          es.close();
+          eventSourceRef.current = null;
+          setSseActive(false);
+        } else if (event.event === "stage_complete") {
+          queryClient.invalidateQueries({ queryKey: ["run", id] });
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    es.onerror = () => {
+      es.close();
+      eventSourceRef.current = null;
+      setSseActive(false);
+    };
+
+    return () => {
+      es.close();
+      eventSourceRef.current = null;
+      setSseActive(false);
+    };
+  }, [id, run?.status]);
+
+  async function handleDelete() {
+    if (!id) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteRun(id);
+      queryClient.invalidateQueries({ queryKey: ["runs"] });
+      setLocation("/");
+    } catch (err: unknown) {
+      setDeleteError(err instanceof Error ? err.message : "Failed to delete run");
+      setDeleting(false);
+    }
+  }
 
   if (isLoading) {
     return (
@@ -247,11 +338,15 @@ export default function RunDetailPage() {
   }));
 
   const isDone = run.status === "completed" || run.status === "partial";
+  const isActive = run.status === "running" || run.status === "pending";
   const distillMode = getDistillationMode(run.config);
   const isDpo = distillMode === "dpo";
   const hasRecords = (run.metrics?.total_records ?? 0) > 0;
   const canPush = isDone && hasRecords && !run.hf_status;
   const isUploading = run.hf_status === "uploading";
+  const teacherModel = run.config
+    ? String((run.config.generation as Record<string, unknown> | undefined)?.teacher_model ?? "")
+    : "";
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -270,6 +365,48 @@ export default function RunDetailPage() {
             Distillation · {DISTILLATION_LABELS[distillMode] ?? distillMode}
           </span>
         )}
+        {sseActive && (
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-semibold bg-green-500/10 text-green-400 border border-green-500/20">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+            Live
+          </span>
+        )}
+        <div className="ml-auto">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5 text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
+                disabled={deleting || isActive}
+                title={isActive ? "Cannot delete a running pipeline" : "Delete this run"}
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete run?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete <strong>{run.run_name}</strong> and all associated data on disk. This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              {deleteError && (
+                <p className="text-sm text-red-400">{deleteError}</p>
+              )}
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDelete}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       </div>
 
       <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -437,11 +574,11 @@ export default function RunDetailPage() {
                 <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
                   <span>Distillation Mode:</span>
                   <span className="font-semibold text-violet-400">{DISTILLATION_LABELS[distillMode] ?? distillMode}</span>
-                  {(run.config.generation as Record<string, unknown> | undefined)?.teacher_model && (
+                  {teacherModel && (
                     <>
                       <span>·</span>
                       <span>Teacher Model:</span>
-                      <span className="font-mono text-foreground">{String((run.config.generation as Record<string, unknown>).teacher_model)}</span>
+                      <span className="font-mono text-foreground">{teacherModel}</span>
                     </>
                   )}
                 </div>

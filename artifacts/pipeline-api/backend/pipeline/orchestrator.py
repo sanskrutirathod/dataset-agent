@@ -18,6 +18,7 @@ from ..modules.validate import run_validate
 from ..modules.score import run_score_and_filter
 from ..modules.export import run_export
 from .db import create_run, update_run_status, update_run_metrics
+from . import event_bus
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +89,13 @@ def run_pipeline(run_id: str, config: PipelineConfig) -> None:
         ms = (time.time() - t0) * 1000
         return result, ms
 
+    def emit_stage(stage: str, output_count: int) -> None:
+        event_bus.publish(run_id, {
+            "event": "stage_complete",
+            "stage": stage,
+            "output_count": output_count,
+        })
+
     update_run_status(run_id, RunStatus.running)
 
     try:
@@ -110,10 +118,12 @@ def run_pipeline(run_id: str, config: PipelineConfig) -> None:
             latency_ms=ms,
             notes="; ".join(ingest_notes) if ingest_notes else "",
         ))
+        emit_stage("ingest", len(sources))
         logger.info(f"[{run_id}] ingest: {len(sources)} sources")
 
         if not sources:
             update_run_status(run_id, RunStatus.failed, "No sources ingested")
+            event_bus.close_run(run_id)
             return
 
         # Stage 2: Clean
@@ -130,6 +140,7 @@ def run_pipeline(run_id: str, config: PipelineConfig) -> None:
             output_count=len(cleaned),
             latency_ms=ms,
         ))
+        emit_stage("clean", len(cleaned))
 
         # Stage 3: Dedup
         dedup_dir = run_dir / "dedup"
@@ -145,6 +156,7 @@ def run_pipeline(run_id: str, config: PipelineConfig) -> None:
             output_count=len(deduped),
             latency_ms=ms,
         ))
+        emit_stage("dedup", len(deduped))
 
         # Stage 4: Chunk
         chunk_dir = run_dir / "chunks"
@@ -162,9 +174,11 @@ def run_pipeline(run_id: str, config: PipelineConfig) -> None:
             latency_ms=ms,
             notes=f"avg_tokens={avg_tokens:.1f}",
         ))
+        emit_stage("chunk", len(chunks))
 
         if not chunks:
             update_run_status(run_id, RunStatus.failed, "No chunks produced")
+            event_bus.close_run(run_id)
             return
 
         # Stage 5: Generate
@@ -184,10 +198,12 @@ def run_pipeline(run_id: str, config: PipelineConfig) -> None:
             output_count=len(records),
             latency_ms=ms,
         ))
+        emit_stage("generate", len(records))
 
         if not records:
             update_run_status(run_id, RunStatus.partial, "No records generated")
             _compute_and_save_metrics(run_id, sources, cleaned, deduped, chunks, records, [], stage_metrics)
+            event_bus.close_run(run_id)
             return
 
         # Stage 6: Validate
@@ -206,6 +222,7 @@ def run_pipeline(run_id: str, config: PipelineConfig) -> None:
             output_count=len(valid_records),
             latency_ms=ms,
         ))
+        emit_stage("validate", len(valid_records))
 
         # Stage 7: Score + Filter
         scored_dir = run_dir / "scored"
@@ -225,6 +242,7 @@ def run_pipeline(run_id: str, config: PipelineConfig) -> None:
             output_count=len(final_records),
             latency_ms=ms,
         ))
+        emit_stage("score", len(final_records))
 
         # Stage 8: Export
         export_dir = run_dir / "export"
@@ -236,6 +254,7 @@ def run_pipeline(run_id: str, config: PipelineConfig) -> None:
             input_count=len(final_records),
             output_count=len(final_records),
         ))
+        emit_stage("export", len(final_records))
 
         _compute_and_save_metrics(
             run_id, sources, cleaned, deduped, chunks, records, final_records,
@@ -247,6 +266,8 @@ def run_pipeline(run_id: str, config: PipelineConfig) -> None:
     except Exception as e:
         logger.exception(f"[{run_id}] Pipeline failed: {e}")
         update_run_status(run_id, RunStatus.failed, str(e))
+    finally:
+        event_bus.close_run(run_id)
 
 
 def _compute_and_save_metrics(

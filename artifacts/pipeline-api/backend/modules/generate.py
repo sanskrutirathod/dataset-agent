@@ -486,6 +486,9 @@ def generate_for_chunk(
     return records
 
 
+_CIRCUIT_BREAKER_THRESHOLD = 3
+
+
 def run_generate(
     chunks: list[Chunk],
     config: GenerationConfig,
@@ -495,15 +498,27 @@ def run_generate(
     out_dir.mkdir(parents=True, exist_ok=True)
     all_records: list[DatasetRecord] = []
     existing_hashes: set[str] = set()
+    consecutive_failures = 0
 
     for i, chunk in enumerate(chunks):
         if len(all_records) >= max_records:
             break
+        if consecutive_failures >= _CIRCUIT_BREAKER_THRESHOLD:
+            logger.warning(
+                f"Circuit breaker tripped after {consecutive_failures} consecutive LLM failures — "
+                f"skipping remaining {len(chunks) - i} chunks and returning partial results"
+            )
+            break
         try:
             records = generate_for_chunk(chunk, config, existing_hashes)
-            all_records.extend(records)
+            if records:
+                consecutive_failures = 0
+                all_records.extend(records)
+            else:
+                consecutive_failures += 1
             logger.debug(f"Chunk {i+1}/{len(chunks)}: {len(records)} records generated")
         except Exception as e:
+            consecutive_failures += 1
             logger.error(f"Generation error for chunk {chunk.chunk_id}: {e}")
 
     out_file = out_dir / "records.jsonl"

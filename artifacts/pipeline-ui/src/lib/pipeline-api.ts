@@ -129,3 +129,9 @@ export async function pushToHub(runId: string, req: PushToHubRequest): Promise<H
 export async function getHubStatus(runId: string): Promise<HubStatusResponse> {
   return apiFetch<HubStatusResponse>(`/pipeline/runs/${runId}/hub-status`);
 }
+
+export async function deleteRun(runId: string): Promise<{ deleted: boolean; run_id: string }> {
+  return apiFetch<{ deleted: boolean; run_id: string }>(`/api/v1/runs/${runId}`, {
+    method: "DELETE",
+  });
+}
