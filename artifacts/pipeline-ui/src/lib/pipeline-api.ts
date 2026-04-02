@@ -71,6 +71,21 @@ export interface RunListItem {
 export interface RunDetail extends RunListItem {
   config?: Record<string, unknown>;
   error?: string | null;
+  hf_status?: string | null;
+  hf_repo_url?: string | null;
+}
+
+export interface PushToHubRequest {
+  repo_id: string;
+  private: boolean;
+  description: string;
+  split: string;
+}
+
+export interface HubStatusResponse {
+  run_id: string;
+  hf_status?: string | null;
+  hf_repo_url?: string | null;
 }
 
 export function getDistillationMode(run: RunDetail | RunListItem): string | null {
@@ -102,4 +117,15 @@ export async function getRun(runId: string): Promise<RunDetail> {
 export function downloadUrl(runId: string, format: "jsonl" | "csv" | "report" | "dpo_jsonl"): string {
   const base = import.meta.env.BASE_URL.replace(/\/$/, "");
   return `${base}/pipeline/runs/${runId}/download?format=${format}`;
+}
+
+export async function pushToHub(runId: string, req: PushToHubRequest): Promise<HubStatusResponse> {
+  return apiFetch<HubStatusResponse>(`/pipeline/runs/${runId}/push-to-hub`, {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
+}
+
+export async function getHubStatus(runId: string): Promise<HubStatusResponse> {
+  return apiFetch<HubStatusResponse>(`/pipeline/runs/${runId}/hub-status`);
 }

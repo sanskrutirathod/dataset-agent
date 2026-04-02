@@ -33,10 +33,21 @@ def init_db() -> None:
                 stage_metrics_json TEXT,
                 error TEXT,
                 created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+                updated_at TEXT NOT NULL,
+                hf_status TEXT,
+                hf_repo_url TEXT
             );
         """)
         conn.commit()
+
+    with get_conn() as conn:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(runs)").fetchall()}
+        if "hf_status" not in cols:
+            conn.execute("ALTER TABLE runs ADD COLUMN hf_status TEXT")
+        if "hf_repo_url" not in cols:
+            conn.execute("ALTER TABLE runs ADD COLUMN hf_repo_url TEXT")
+        conn.commit()
+
     logger.info("Database initialized")
 
 
@@ -94,3 +105,17 @@ def list_runs() -> list[dict]:
             "SELECT * FROM runs ORDER BY created_at DESC"
         ).fetchall()
         return [dict(r) for r in rows]
+
+
+def update_run_hf_status(
+    run_id: str,
+    hf_status: str,
+    hf_repo_url: Optional[str] = None,
+) -> None:
+    now = datetime.utcnow().isoformat()
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE runs SET hf_status=?, hf_repo_url=?, updated_at=? WHERE run_id=?",
+            (hf_status, hf_repo_url, now, run_id),
+        )
+        conn.commit()

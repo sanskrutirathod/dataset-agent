@@ -1,12 +1,13 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
-import { getRun, downloadUrl } from "@/lib/pipeline-api";
+import { getRun, downloadUrl, pushToHub, getHubStatus } from "@/lib/pipeline-api";
 import { StatusBadge } from "@/components/StatusBadge";
 import { StageTimeline } from "@/components/StageTimeline";
 import { MetricCard } from "@/components/MetricCard";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Download } from "lucide-react";
+import { ArrowLeft, Download, Upload, ExternalLink, X, Eye, EyeOff } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { useState, useEffect, useRef } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
@@ -25,8 +26,191 @@ function getDistillationMode(config: Record<string, unknown> | undefined): strin
   return (generation?.distillation_mode as string) || null;
 }
 
+function PushToHubPanel({ runId, onClose }: { runId: string; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const [repoId, setRepoId] = useState("");
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [description, setDescription] = useState("");
+  const [split, setSplit] = useState("train");
+  const [apiError, setApiError] = useState<string | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: () => pushToHub(runId, { repo_id: repoId, private: isPrivate, description, split }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["run", runId] });
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      setApiError(msg);
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setApiError(null);
+    if (!repoId.trim()) return;
+    mutation.mutate();
+  };
+
+  return (
+    <div className="bg-card rounded-xl border border-card-border p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          Push to HuggingFace Hub
+        </h2>
+        <button
+          onClick={onClose}
+          className="text-muted-foreground hover:text-foreground transition-colors"
+          aria-label="Close"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-xs text-muted-foreground mb-1.5">
+            Repository ID <span className="text-red-400">*</span>
+          </label>
+          <input
+            type="text"
+            value={repoId}
+            onChange={(e) => setRepoId(e.target.value)}
+            placeholder="username/my-dataset"
+            className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            required
+          />
+          <p className="text-xs text-muted-foreground mt-1">Format: username/dataset-name</p>
+        </div>
+
+        <div>
+          <label className="block text-xs text-muted-foreground mb-1.5">Split name</label>
+          <input
+            type="text"
+            value={split}
+            onChange={(e) => setSplit(e.target.value)}
+            placeholder="train"
+            className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs text-muted-foreground mb-1.5">Description (optional)</label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={2}
+            placeholder="A brief description of this dataset..."
+            className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+          />
+        </div>
+
+        <div>
+          <button
+            type="button"
+            onClick={() => setIsPrivate(!isPrivate)}
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {isPrivate ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            {isPrivate ? "Private repository" : "Public repository"}
+          </button>
+        </div>
+
+        {apiError && (
+          <div className="rounded-lg bg-red-950/30 border border-red-800/40 px-3 py-2 text-xs text-red-400">
+            {apiError}
+          </div>
+        )}
+
+        <Button
+          type="submit"
+          size="sm"
+          disabled={mutation.isPending || !repoId.trim()}
+          className="gap-2 w-full"
+        >
+          <Upload className="w-3.5 h-3.5" />
+          {mutation.isPending ? "Uploading…" : "Push to Hub"}
+        </Button>
+      </form>
+    </div>
+  );
+}
+
+function HubStatusCard({ runId, hfStatus, hfRepoUrl }: {
+  runId: string;
+  hfStatus: string | null | undefined;
+  hfRepoUrl: string | null | undefined;
+}) {
+  const queryClient = useQueryClient();
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (hfStatus === "uploading") {
+      pollingRef.current = setInterval(async () => {
+        try {
+          const res = await getHubStatus(runId);
+          if (res.hf_status !== "uploading") {
+            queryClient.invalidateQueries({ queryKey: ["run", runId] });
+            if (pollingRef.current) clearInterval(pollingRef.current);
+          }
+        } catch {
+        }
+      }, 3000);
+    }
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [hfStatus, runId, queryClient]);
+
+  if (!hfStatus) return null;
+
+  if (hfStatus === "uploading") {
+    return (
+      <div className="bg-card rounded-xl border border-card-border p-5">
+        <div className="flex items-center gap-3">
+          <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm text-muted-foreground">Uploading to HuggingFace Hub…</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (hfStatus === "done" && hfRepoUrl) {
+    return (
+      <div className="bg-card rounded-xl border border-card-border p-5">
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+          HuggingFace Hub
+        </h2>
+        <a
+          href={hfRepoUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 text-sm text-indigo-400 hover:text-indigo-300 transition-colors font-medium"
+        >
+          <ExternalLink className="w-4 h-4" />
+          View on HuggingFace
+        </a>
+      </div>
+    );
+  }
+
+  if (hfStatus === "error") {
+    return (
+      <div className="bg-card rounded-xl border border-red-800/30 p-5">
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+          HuggingFace Hub Upload Failed
+        </h2>
+        <p className="text-xs text-red-400">Upload encountered an error. Check that your HUGGINGFACE_TOKEN is valid and try again.</p>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 export default function RunDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const [showPushPanel, setShowPushPanel] = useState(false);
 
   const { data: run, isLoading } = useQuery({
     queryKey: ["run", id],
@@ -34,7 +218,8 @@ export default function RunDetailPage() {
     enabled: !!id,
     refetchInterval: (query) => {
       const s = query.state.data?.status;
-      return s === "running" || s === "pending" ? 3000 : false;
+      const hf = query.state.data?.hf_status;
+      return s === "running" || s === "pending" || hf === "uploading" ? 3000 : false;
     },
   });
 
@@ -64,6 +249,9 @@ export default function RunDetailPage() {
   const isDone = run.status === "completed" || run.status === "partial";
   const distillMode = getDistillationMode(run.config);
   const isDpo = distillMode === "dpo";
+  const hasRecords = (run.metrics?.total_records ?? 0) > 0;
+  const canPush = isDone && hasRecords && !run.hf_status;
+  const isUploading = run.hf_status === "uploading";
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -172,7 +360,7 @@ export default function RunDetailPage() {
             </div>
           )}
 
-          {isDone && run.metrics?.total_records && run.metrics.total_records > 0 ? (
+          {isDone && hasRecords ? (
             <div className="bg-card rounded-xl border border-card-border p-5">
               <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">Download Dataset</h2>
               <div className="flex flex-wrap gap-2">
@@ -192,6 +380,31 @@ export default function RunDetailPage() {
                     </Button>
                   </a>
                 )}
+                {canPush && !showPushPanel && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 border-indigo-700/60 text-indigo-300 hover:bg-indigo-900/30 hover:border-indigo-600"
+                    onClick={() => setShowPushPanel(true)}
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    Push to HuggingFace
+                  </Button>
+                )}
+                {isUploading && (
+                  <Button variant="outline" size="sm" disabled className="gap-2 border-indigo-700/60 text-indigo-400">
+                    <div className="w-3.5 h-3.5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                    Uploading…
+                  </Button>
+                )}
+                {run.hf_status === "done" && run.hf_repo_url && (
+                  <a href={run.hf_repo_url} target="_blank" rel="noopener noreferrer">
+                    <Button variant="outline" size="sm" className="gap-2 border-indigo-700/60 text-indigo-300 hover:bg-indigo-900/30">
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      View on HuggingFace
+                    </Button>
+                  </a>
+                )}
               </div>
               {isDpo && (
                 <p className="text-xs text-muted-foreground mt-2">
@@ -203,6 +416,18 @@ export default function RunDetailPage() {
             <div className="bg-card rounded-xl border border-card-border p-5">
               <p className="text-sm text-muted-foreground">No records to download — check the run configuration and source quality.</p>
             </div>
+          )}
+
+          {showPushPanel && canPush && (
+            <PushToHubPanel runId={run.run_id} onClose={() => setShowPushPanel(false)} />
+          )}
+
+          {run.hf_status && (
+            <HubStatusCard
+              runId={run.run_id}
+              hfStatus={run.hf_status}
+              hfRepoUrl={run.hf_repo_url}
+            />
           )}
 
           {run.config && (

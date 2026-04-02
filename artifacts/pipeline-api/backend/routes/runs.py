@@ -2,6 +2,8 @@
 from __future__ import annotations
 import json
 import logging
+import os
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -11,9 +13,10 @@ from fastapi.responses import FileResponse
 
 from ..schemas import (
     PipelineRunRequest, PipelineRunResponse, RunListItem, RunDetail,
-    RunStatus, RunMetrics, StageMetrics, DownloadFormat, PipelineConfig
+    RunStatus, RunMetrics, StageMetrics, DownloadFormat, PipelineConfig,
+    PushToHubRequest, HubStatusResponse,
 )
-from ..pipeline.db import create_run, get_run, list_runs
+from ..pipeline.db import create_run, get_run, list_runs, update_run_hf_status
 from ..pipeline.orchestrator import run_pipeline
 from ..utils.ids import new_id
 
@@ -127,6 +130,28 @@ def _make_run_detail(row: dict) -> RunDetail:
         metrics=_parse_metrics(row),
         stage_metrics=_parse_stage_metrics(row),
         error=row.get("error") or None,
+        hf_status=row.get("hf_status") or None,
+        hf_repo_url=row.get("hf_repo_url") or None,
+    )
+
+
+def _do_push_to_hub(run_id: str, body: PushToHubRequest, token: str) -> None:
+    from ..modules.hf_upload import push_to_hub
+
+    export_dir = VERSIONS_BASE / run_id / "export"
+    result = push_to_hub(
+        run_id=run_id,
+        repo_id=body.repo_id,
+        token=token,
+        private=body.private,
+        split=body.split,
+        description=body.description,
+        export_dir=export_dir,
+    )
+    update_run_hf_status(
+        run_id=run_id,
+        hf_status=result["status"],
+        hf_repo_url=result.get("url"),
     )
 
 
@@ -178,6 +203,47 @@ async def get_run_detail(run_id: str) -> RunDetail:
     if not row:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
     return _make_run_detail(row)
+
+
+@router.post("/runs/{run_id}/push-to-hub", response_model=HubStatusResponse)
+async def push_run_to_hub(run_id: str, body: PushToHubRequest) -> HubStatusResponse:
+    """Trigger an async upload of the run's dataset to HuggingFace Hub."""
+    row = get_run(run_id)
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+    if row["status"] not in (RunStatus.completed.value, RunStatus.partial.value):
+        raise HTTPException(status_code=409, detail="Run must be completed before pushing to Hub")
+
+    token = os.environ.get("HUGGINGFACE_TOKEN", "")
+    if not token:
+        raise HTTPException(
+            status_code=400,
+            detail="HUGGINGFACE_TOKEN environment secret is not set. Please add it in your environment settings.",
+        )
+
+    update_run_hf_status(run_id, "uploading")
+
+    t = threading.Thread(
+        target=_do_push_to_hub,
+        args=(run_id, body, token),
+        daemon=True,
+    )
+    t.start()
+
+    return HubStatusResponse(run_id=run_id, hf_status="uploading", hf_repo_url=None)
+
+
+@router.get("/runs/{run_id}/hub-status", response_model=HubStatusResponse)
+async def get_hub_status(run_id: str) -> HubStatusResponse:
+    """Poll the HuggingFace upload status for a run."""
+    row = get_run(run_id)
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+    return HubStatusResponse(
+        run_id=run_id,
+        hf_status=row.get("hf_status") or None,
+        hf_repo_url=row.get("hf_repo_url") or None,
+    )
 
 
 @router.get("/runs/{run_id}/download")

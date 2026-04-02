@@ -200,3 +200,9 @@ class DownloadFormat(str, Enum):
     csv = "csv"
     report = "report"
     dpo_jsonl = "dpo_jsonl"
+
+
+class HubStatusResponse(BaseModel):
+    run_id: str
+    hf_status: Optional[str] = None
+    hf_repo_url: Optional[str] = None
