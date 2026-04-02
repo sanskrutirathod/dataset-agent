@@ -85,6 +85,13 @@ async def _parse_run_request(request: Request) -> PipelineConfig:
 
 
 def _start_run(config: PipelineConfig) -> PipelineRunResponse:
+    # Validate LLM configuration before starting the pipeline
+    if not os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY"):
+        logger.warning(
+            "AI_INTEGRATIONS_OPENAI_API_KEY is not set. "
+            "The pipeline will run but generation stage will fail."
+        )
+
     run_id = new_id("run")
     create_run(run_id, config.run_name, config.model_dump())
     submit_job(run_pipeline, run_id, config)

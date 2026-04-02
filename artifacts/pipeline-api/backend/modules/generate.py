@@ -150,9 +150,15 @@ PROMPTS = {
 
 
 def _get_client() -> OpenAI:
+    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError(
+            "AI_INTEGRATIONS_OPENAI_API_KEY environment variable is not set. "
+            "Please configure a valid OpenAI API key to enable LLM generation."
+        )
     return OpenAI(
         base_url=os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL"),
-        api_key=os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY", "dummy"),
+        api_key=api_key,
     )
 
 
@@ -202,7 +208,7 @@ def _repair_json_object(text: str) -> Optional[dict]:
     return None
 
 
-def _llm_call(client: OpenAI, model: str, prompt: str, max_tokens: int = 2048) -> Optional[str]:
+def _llm_call(client: OpenAI, model: str, prompt: str, max_tokens: int = 2048, temperature: float = 1.0) -> Optional[str]:
     """Make a single LLM call with retry logic."""
     for attempt in range(3):
         try:
@@ -210,6 +216,7 @@ def _llm_call(client: OpenAI, model: str, prompt: str, max_tokens: int = 2048) -
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
                 max_completion_tokens=max_tokens,
+                temperature=temperature,
             )
             return response.choices[0].message.content or ""
         except Exception as e:
@@ -423,16 +430,13 @@ def generate_for_chunk(
     prompt_template = PROMPTS.get(mode, QA_PROMPT)
     prompt = prompt_template.format(text=chunk.text[:4000], n=n)
 
-    if hasattr(config, "temperature") and config.temperature is not None and config.temperature != 1.0:
-        logger.debug(
-            f"temperature={config.temperature} requested but the current model only supports "
-            "the default value (1.0); parameter is not forwarded to the API"
-        )
+    # Get temperature from config, default to 1.0 if not set
+    temperature = getattr(config, "temperature", None) or 1.0
 
     client = _get_client()
     parsed = None
     for attempt in range(3):
-        raw = _llm_call(client, "gpt-5-mini", prompt, max_tokens=2048)
+        raw = _llm_call(client, "gpt-5-mini", prompt, max_tokens=2048, temperature=temperature)
         if not raw:
             return []
         parsed = _repair_json(raw)
@@ -491,6 +495,15 @@ def run_generate(
     all_records: list[DatasetRecord] = []
     existing_hashes: set[str] = set()
     consecutive_failures = 0
+
+    # Fail fast: validate LLM configuration before processing any chunks
+    try:
+        _get_client()
+    except ValueError:
+        logger.error("LLM generation is not configured: no API key available")
+        out_file = out_dir / "records.jsonl"
+        out_file.write_text("")
+        return []
 
     for i, chunk in enumerate(chunks):
         if len(all_records) >= max_records:

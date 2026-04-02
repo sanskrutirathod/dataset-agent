@@ -128,6 +128,8 @@ def push_to_hub(
         logger.info("HF repo ensured: %s (private=%s)", repo_id, private)
 
         records = []
+        scores_raw = []
+        malformed_lines = 0
         with jsonl_path.open("r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
@@ -139,23 +141,18 @@ def push_to_hub(
                             "input": rec.get("input", ""),
                             "output": rec.get("output", ""),
                         })
-                    except json.JSONDecodeError:
-                        pass
-
-        record_count = len(records)
-        scores_raw = []
-        with jsonl_path.open("r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    try:
-                        rec = json.loads(line)
                         s = rec.get("scores", {})
                         final = s.get("final", 0.0) if isinstance(s, dict) else 0.0
                         if final > 0:
                             scores_raw.append(final)
                     except json.JSONDecodeError:
-                        pass
+                        malformed_lines += 1
+                        logger.warning(f"Skipping malformed JSON line in {jsonl_path}")
+
+        if malformed_lines > 0:
+            logger.warning(f"{malformed_lines} malformed lines skipped in {jsonl_path}")
+
+        record_count = len(records)
 
         avg_score = statistics.mean(scores_raw) if scores_raw else 0.0
         min_score = min(scores_raw) if scores_raw else 0.0

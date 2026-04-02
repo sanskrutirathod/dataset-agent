@@ -16,11 +16,12 @@ _lock = __import__("threading").Lock()
 
 
 def get_status() -> dict:
-    return {
-        "active_workers": _active_count,
-        "queue_depth": _queue_depth,
-        "max_concurrency": _CONCURRENCY,
-    }
+    with _lock:
+        return {
+            "active_workers": _active_count,
+            "queue_depth": _queue_depth,
+            "max_concurrency": _CONCURRENCY,
+        }
 
 
 def submit_job(fn: Callable, *args: Any, **kwargs: Any) -> None:
