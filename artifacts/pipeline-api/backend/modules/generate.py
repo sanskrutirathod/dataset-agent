@@ -235,8 +235,9 @@ def _generate_cot(
     model = config.teacher_model or "gpt-5-mini"
     n = config.max_records_per_chunk
     prompt = COT_PROMPT.format(text=chunk.text[:4000], n=n)
+    temperature = getattr(config, "temperature", None) or 1.0
 
-    raw = _llm_call(client, model, prompt, max_tokens=3000)
+    raw = _llm_call(client, model, prompt, max_tokens=3000, temperature=temperature)
     if not raw:
         return []
 
@@ -291,9 +292,10 @@ def _generate_dpo(
     client = _get_client()
     model = config.teacher_model or "gpt-5-mini"
     n = config.max_records_per_chunk
+    temperature = getattr(config, "temperature", None) or 1.0
 
     instr_prompt = DPO_INSTRUCTION_PROMPT.format(text=chunk.text[:4000], n=n)
-    raw_instrs = _llm_call(client, model, instr_prompt, max_tokens=1024)
+    raw_instrs = _llm_call(client, model, instr_prompt, max_tokens=1024, temperature=temperature)
     if not raw_instrs:
         return []
 
@@ -314,8 +316,8 @@ def _generate_dpo(
             text=chunk.text[:3000], instruction=instruction
         )
 
-        raw_preferred = _llm_call(client, model, preferred_prompt, max_tokens=1024)
-        raw_rejected = _llm_call(client, model, rejected_prompt, max_tokens=512)
+        raw_preferred = _llm_call(client, model, preferred_prompt, max_tokens=1024, temperature=temperature)
+        raw_rejected = _llm_call(client, model, rejected_prompt, max_tokens=512, temperature=temperature)
 
         if not raw_preferred or not raw_rejected:
             continue
@@ -367,8 +369,9 @@ def _generate_sft(
     model = config.teacher_model or "gpt-5-mini"
     n = config.max_records_per_chunk
     prompt = SFT_PROMPT.format(text=chunk.text[:4000], n=n)
+    temperature = getattr(config, "temperature", None) or 1.0
 
-    raw = _llm_call(client, model, prompt, max_tokens=3000)
+    raw = _llm_call(client, model, prompt, max_tokens=3000, temperature=temperature)
     if not raw:
         return []
 
