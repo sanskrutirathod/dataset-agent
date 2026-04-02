@@ -430,12 +430,17 @@ def generate_for_chunk(
         )
 
     client = _get_client()
-    raw = _llm_call(client, "gpt-5-mini", prompt, max_tokens=2048)
-    if not raw:
-        return []
-    parsed = _repair_json(raw)
-    if not parsed or not isinstance(parsed, list):
-        logger.warning("Failed to parse JSON from LLM response")
+    parsed = None
+    for attempt in range(3):
+        raw = _llm_call(client, "gpt-5-mini", prompt, max_tokens=2048)
+        if not raw:
+            return []
+        parsed = _repair_json(raw)
+        if parsed and isinstance(parsed, list):
+            break
+        logger.warning(f"Failed to parse JSON from LLM response (attempt {attempt + 1})")
+
+    if not parsed:
         return []
 
     records = []
