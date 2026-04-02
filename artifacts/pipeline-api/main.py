@@ -1,5 +1,6 @@
 """WEBSPACEAI Dataset Engine — FastAPI entry point."""
 from __future__ import annotations
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -10,6 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi.openapi.utils import get_openapi
 
 from backend.pipeline.db import init_db
+from backend.pipeline import event_bus
 from backend.routes.ingest import router as ingest_router, ingest_alias_router
 from backend.routes.runs import (
     router as pipeline_router,
@@ -30,6 +32,7 @@ _API_KEY = os.environ.get("API_KEY", "")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    event_bus.set_loop(asyncio.get_event_loop())
     logger.info("Dataset Engine started")
     yield
     logger.info("Dataset Engine shutting down")

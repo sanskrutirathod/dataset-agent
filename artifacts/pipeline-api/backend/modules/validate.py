@@ -52,6 +52,10 @@ def validate_record(
         flags.append("safety_filter")
     if record.instruction and not _safety_check(record.instruction):
         flags.append("safety_filter_instruction")
+    if record.thinking and not _safety_check(record.thinking):
+        flags.append("safety_filter_thinking")
+    if record.rejected and not _safety_check(record.rejected):
+        flags.append("safety_filter_rejected")
 
     if source_chunk:
         overlap = _ngram_overlap(record.output, source_chunk.text)

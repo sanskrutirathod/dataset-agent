@@ -212,8 +212,10 @@ def run_ingest(
             text = cfg.get("value", "") or cfg.get("text", "")
             title = cfg.get("title", "text_input")
             source = ingest_text(text, title=title)
-            if source:
+            if source and source.raw_text.strip():
                 results.append(source)
+            elif source and not source.raw_text.strip():
+                logger.warning(f"Skipping empty text source: title='{title}'")
         else:
             logger.warning(f"Unknown source type: {src_type}")
             continue

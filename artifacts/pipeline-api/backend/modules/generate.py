@@ -418,7 +418,6 @@ def generate_for_chunk(
         elif config.distillation_mode == DistillationMode.sft:
             return _generate_sft(chunk, config, existing_hashes)
 
-    client = _get_client()
     mode = config.mode
     n = config.max_records_per_chunk
     prompt_template = PROMPTS.get(mode, QA_PROMPT)
@@ -430,25 +429,13 @@ def generate_for_chunk(
             "the default value (1.0); parameter is not forwarded to the API"
         )
 
-    for attempt in range(3):
-        try:
-            response = _get_client().chat.completions.create(
-                model="gpt-5-mini",
-                messages=[{"role": "user", "content": prompt}],
-                max_completion_tokens=2048,
-            )
-            raw = response.choices[0].message.content or ""
-            parsed = _repair_json(raw)
-            if not parsed or not isinstance(parsed, list):
-                logger.warning(f"Failed to parse JSON from LLM (attempt {attempt+1})")
-                continue
-            break
-        except Exception as e:
-            logger.warning(f"LLM call failed (attempt {attempt+1}): {e}")
-            time.sleep(2 ** attempt)
-            parsed = None
-
-    if not parsed:
+    client = _get_client()
+    raw = _llm_call(client, "gpt-5-mini", prompt, max_tokens=2048)
+    if not raw:
+        return []
+    parsed = _repair_json(raw)
+    if not parsed or not isinstance(parsed, list):
+        logger.warning("Failed to parse JSON from LLM response")
         return []
 
     records = []
