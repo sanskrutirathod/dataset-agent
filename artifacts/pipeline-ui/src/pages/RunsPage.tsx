@@ -26,6 +26,18 @@ function getCurrentStage(run: { status: string; stage_metrics?: Array<{ stage: s
   return "—";
 }
 
+const DISTILLATION_MODE_LABELS: Record<string, string> = {
+  cot: "CoT",
+  dpo: "DPO",
+  sft: "SFT",
+};
+
+function getDistillationMode(run: { config?: Record<string, unknown> }): string | null {
+  const config = run as unknown as { config?: Record<string, unknown> };
+  const generation = config.config?.generation as Record<string, unknown> | undefined;
+  return (generation?.distillation_mode as string) || null;
+}
+
 export default function RunsPage() {
   const { data: runs, isLoading, refetch, isFetching } = useQuery({
     queryKey: ["runs"],
@@ -101,48 +113,58 @@ export default function RunsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {sortedRuns.map((run) => (
-                <tr key={run.run_id} className="hover:bg-accent/40 transition-colors">
-                  <td className="px-5 py-4">
-                    <div className="text-sm font-medium text-foreground">{run.run_name}</div>
-                    <div className="text-xs text-muted-foreground font-mono mt-0.5">{run.run_id}</div>
-                  </td>
-                  <td className="px-5 py-4">
-                    <StatusBadge status={run.status} />
-                  </td>
-                  <td className="px-5 py-4 text-sm text-muted-foreground font-mono tabular-nums">
-                    {getCurrentStage(run)}
-                  </td>
-                  <td className="px-5 py-4 text-sm text-foreground tabular-nums">
-                    {run.metrics?.total_records ?? <span className="text-muted-foreground">—</span>}
-                  </td>
-                  <td className="px-5 py-4 text-sm tabular-nums">
-                    {run.metrics?.ingest_success_rate != null
-                      ? <span className="text-foreground">{(run.metrics.ingest_success_rate * 100).toFixed(0)}%</span>
-                      : <span className="text-muted-foreground">—</span>}
-                  </td>
-                  <td className="px-5 py-4 text-sm tabular-nums">
-                    {run.metrics?.validation_pass_rate != null
-                      ? <span className="text-foreground">{(run.metrics.validation_pass_rate * 100).toFixed(0)}%</span>
-                      : <span className="text-muted-foreground">—</span>}
-                  </td>
-                  <td className="px-5 py-4 text-sm tabular-nums">
-                    {run.metrics?.avg_final_score != null
-                      ? <span className="text-foreground">{(run.metrics.avg_final_score * 100).toFixed(0)}%</span>
-                      : <span className="text-muted-foreground">—</span>}
-                  </td>
-                  <td className="px-5 py-4 text-sm text-muted-foreground whitespace-nowrap">
-                    {formatDistanceToNow(new Date(run.created_at), { addSuffix: true })}
-                  </td>
-                  <td className="px-5 py-4 text-right">
-                    <Link href={`/runs/${run.run_id}`}>
-                      <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80 hover:bg-primary/10 text-xs">
-                        View →
-                      </Button>
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+              {sortedRuns.map((run) => {
+                const distillMode = getDistillationMode(run as unknown as { config?: Record<string, unknown> });
+                return (
+                  <tr key={run.run_id} className="hover:bg-accent/40 transition-colors">
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-foreground">{run.run_name}</span>
+                        {distillMode && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-violet-500/15 text-violet-400 border border-violet-500/25">
+                            Distillation{DISTILLATION_MODE_LABELS[distillMode] ? ` · ${DISTILLATION_MODE_LABELS[distillMode]}` : ""}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground font-mono mt-0.5">{run.run_id}</div>
+                    </td>
+                    <td className="px-5 py-4">
+                      <StatusBadge status={run.status} />
+                    </td>
+                    <td className="px-5 py-4 text-sm text-muted-foreground font-mono tabular-nums">
+                      {getCurrentStage(run)}
+                    </td>
+                    <td className="px-5 py-4 text-sm text-foreground tabular-nums">
+                      {run.metrics?.total_records ?? <span className="text-muted-foreground">—</span>}
+                    </td>
+                    <td className="px-5 py-4 text-sm tabular-nums">
+                      {run.metrics?.ingest_success_rate != null
+                        ? <span className="text-foreground">{(run.metrics.ingest_success_rate * 100).toFixed(0)}%</span>
+                        : <span className="text-muted-foreground">—</span>}
+                    </td>
+                    <td className="px-5 py-4 text-sm tabular-nums">
+                      {run.metrics?.validation_pass_rate != null
+                        ? <span className="text-foreground">{(run.metrics.validation_pass_rate * 100).toFixed(0)}%</span>
+                        : <span className="text-muted-foreground">—</span>}
+                    </td>
+                    <td className="px-5 py-4 text-sm tabular-nums">
+                      {run.metrics?.avg_final_score != null
+                        ? <span className="text-foreground">{(run.metrics.avg_final_score * 100).toFixed(0)}%</span>
+                        : <span className="text-muted-foreground">—</span>}
+                    </td>
+                    <td className="px-5 py-4 text-sm text-muted-foreground whitespace-nowrap">
+                      {formatDistanceToNow(new Date(run.created_at), { addSuffix: true })}
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <Link href={`/runs/${run.run_id}`}>
+                        <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80 hover:bg-primary/10 text-xs">
+                          View →
+                        </Button>
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

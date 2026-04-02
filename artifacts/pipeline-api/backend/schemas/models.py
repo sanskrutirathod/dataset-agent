@@ -12,6 +12,12 @@ class SourceType(str, Enum):
     crawl = "crawl"
 
 
+class DistillationMode(str, Enum):
+    cot = "cot"
+    dpo = "dpo"
+    sft = "sft"
+
+
 class Source(BaseModel):
     source_id: str
     type: SourceType
@@ -48,9 +54,9 @@ class DatasetRecord(BaseModel):
     instruction: str = ""
     input: str = ""
     output: str
-    thinking: str = ""
-    chosen: str = ""
-    rejected: str = ""
+    thinking: Optional[str] = None
+    chosen: Optional[str] = None
+    rejected: Optional[str] = None
     provenance: dict[str, str] = Field(default_factory=dict)
     scores: DatasetRecordScores = Field(default_factory=DatasetRecordScores)
     meta: dict[str, Any] = Field(default_factory=dict)
@@ -67,12 +73,6 @@ class CrawlConfig(BaseModel):
 class ChunkConfig(BaseModel):
     target_tokens: int = 600
     overlap: int = 80
-
-
-class DistillationMode(str, Enum):
-    cot = "cot"
-    dpo = "dpo"
-    sft = "sft"
 
 
 class GenerationConfig(BaseModel):
@@ -199,4 +199,4 @@ class DownloadFormat(str, Enum):
     jsonl = "jsonl"
     csv = "csv"
     report = "report"
-    dpo = "dpo"
+    dpo_jsonl = "dpo_jsonl"

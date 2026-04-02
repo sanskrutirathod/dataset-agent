@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Plus, Trash2, Zap, ArrowLeft, ChevronDown, ChevronUp } from "lucide-react";
 import { Link } from "wouter";
@@ -24,6 +24,16 @@ interface SourceEntry {
   crawlAllowedDomains: string;
   crawlDelayMs: number;
   crawlSettingsOpen: boolean;
+}
+
+type StandardGenMode = "qa" | "instruction" | "summary" | "chat";
+type DistillationGenMode = "distillation_cot" | "distillation_dpo" | "distillation_sft";
+type GenMode = StandardGenMode | DistillationGenMode;
+
+const DISTILLATION_MODES: DistillationGenMode[] = ["distillation_cot", "distillation_dpo", "distillation_sft"];
+
+function isDistillationMode(mode: GenMode): mode is DistillationGenMode {
+  return DISTILLATION_MODES.includes(mode as DistillationGenMode);
 }
 
 function genId() {
@@ -49,7 +59,8 @@ export default function NewRunPage() {
 
   const [runName, setRunName] = useState("");
   const [sources, setSources] = useState<SourceEntry[]>([defaultSource()]);
-  const [genMode, setGenMode] = useState<"qa" | "instruction" | "summary" | "chat">("qa");
+  const [genMode, setGenMode] = useState<GenMode>("qa");
+  const [teacherModel, setTeacherModel] = useState("gpt-5-mini");
   const [maxRecords, setMaxRecords] = useState(100);
   const [maxPerChunk, setMaxPerChunk] = useState(3);
   const [targetTokens, setTargetTokens] = useState(200);
@@ -120,11 +131,23 @@ export default function NewRunPage() {
       };
     });
 
+    const distillMode = isDistillationMode(genMode) ? genMode.replace("distillation_", "") : undefined;
+
+    const generation: PipelineConfig["generation"] = {
+      mode: isDistillationMode(genMode) ? "qa" : (genMode as StandardGenMode),
+      max_records_per_chunk: maxPerChunk,
+    };
+
+    if (distillMode) {
+      generation.distillation_mode = distillMode as "cot" | "dpo" | "sft";
+      generation.teacher_model = teacherModel;
+    }
+
     const config: PipelineConfig = {
       run_name: runName.trim(),
       sources: mappedSources,
       chunk: { target_tokens: targetTokens, overlap: chunkOverlap },
-      generation: { mode: genMode, max_records_per_chunk: maxPerChunk },
+      generation,
       validation: { min_length: 20, score_threshold: scoreThreshold },
       limits: { max_records: maxRecords, max_per_source: Math.ceil(maxRecords / validSources.length) },
     };
@@ -134,6 +157,16 @@ export default function NewRunPage() {
 
   const section = "bg-card rounded-xl border border-card-border p-5 space-y-4";
   const sectionTitle = "text-xs font-semibold text-muted-foreground uppercase tracking-wider";
+
+  const genModeDescription: Record<GenMode, string> = {
+    qa: "Generate question-answer pairs for fine-tuning",
+    instruction: "Generate instruction-response pairs (Alpaca format)",
+    summary: "Generate document-summary pairs",
+    chat: "Generate multi-turn conversation examples",
+    distillation_cot: "Teacher generates step-by-step reasoning traces (instruction + thinking + output)",
+    distillation_dpo: "Teacher generates preferred and rejected response pairs (Anthropic HH / TRL DPOTrainer format)",
+    distillation_sft: "Teacher generates rich, verbose expert explanations for knowledge transfer",
+  };
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
@@ -331,24 +364,45 @@ export default function NewRunPage() {
 
           <div>
             <Label className="text-sm text-foreground">Generation Mode</Label>
-            <Select value={genMode} onValueChange={(v) => setGenMode(v as typeof genMode)}>
+            <Select value={genMode} onValueChange={(v) => setGenMode(v as GenMode)}>
               <SelectTrigger className="mt-1.5 bg-background border-input text-foreground">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-card border-card-border">
-                <SelectItem value="qa">Q&A Pairs</SelectItem>
-                <SelectItem value="instruction">Instruction Following</SelectItem>
-                <SelectItem value="summary">Summarization</SelectItem>
-                <SelectItem value="chat">Chat / Dialogue</SelectItem>
+                <SelectGroup>
+                  <SelectLabel className="text-xs text-muted-foreground px-2 py-1">Standard</SelectLabel>
+                  <SelectItem value="qa">Q&A Pairs</SelectItem>
+                  <SelectItem value="instruction">Instruction Following</SelectItem>
+                  <SelectItem value="summary">Summarization</SelectItem>
+                  <SelectItem value="chat">Chat / Dialogue</SelectItem>
+                </SelectGroup>
+                <SelectGroup>
+                  <SelectLabel className="text-xs text-muted-foreground px-2 py-1 border-t border-border mt-1 pt-2">Distillation</SelectLabel>
+                  <SelectItem value="distillation_cot">Chain-of-Thought (CoT)</SelectItem>
+                  <SelectItem value="distillation_dpo">Direct Preference (DPO)</SelectItem>
+                  <SelectItem value="distillation_sft">Knowledge Distillation (SFT)</SelectItem>
+                </SelectGroup>
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground mt-1.5">
-              {genMode === "qa" && "Generate question-answer pairs for fine-tuning"}
-              {genMode === "instruction" && "Generate instruction-response pairs (Alpaca format)"}
-              {genMode === "summary" && "Generate document-summary pairs"}
-              {genMode === "chat" && "Generate multi-turn conversation examples"}
+              {genModeDescription[genMode]}
             </p>
           </div>
+
+          {isDistillationMode(genMode) && (
+            <div>
+              <Label className="text-sm text-foreground">Teacher Model</Label>
+              <Input
+                value={teacherModel}
+                onChange={(e) => setTeacherModel(e.target.value)}
+                placeholder="e.g., gpt-5-mini"
+                className="mt-1.5 bg-background border-input text-foreground placeholder:text-muted-foreground"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Model used as the teacher for distillation. Defaults to the configured model.
+              </p>
+            </div>
+          )}
 
           <div>
             <div className="flex items-center justify-between mb-2">

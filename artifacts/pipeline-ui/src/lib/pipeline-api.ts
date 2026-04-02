@@ -17,11 +17,18 @@ export interface SourceConfig {
 
 export type AnySourceConfig = SourceConfig | CrawlSourceConfig;
 
+export interface GenerationConfig {
+  mode?: "qa" | "instruction" | "summary" | "chat";
+  max_records_per_chunk?: number;
+  distillation_mode?: "cot" | "dpo" | "sft";
+  teacher_model?: string;
+}
+
 export interface PipelineConfig {
   run_name: string;
   sources: AnySourceConfig[];
   chunk?: { target_tokens?: number; overlap?: number };
-  generation?: { mode?: "qa" | "instruction" | "summary" | "chat"; max_records_per_chunk?: number };
+  generation?: GenerationConfig;
   validation?: { min_length?: number; max_length?: number; score_threshold?: number; grounding_min_overlap?: number };
   limits?: { max_records?: number; max_per_source?: number };
 }
@@ -66,6 +73,17 @@ export interface RunDetail extends RunListItem {
   error?: string | null;
 }
 
+export function getDistillationMode(run: RunDetail | RunListItem): string | null {
+  if (!("config" in run) || !run.config) return null;
+  const config = run.config as Record<string, unknown>;
+  const generation = config.generation as Record<string, unknown> | undefined;
+  return (generation?.distillation_mode as string) || null;
+}
+
+export function isDistillationRun(run: RunDetail | RunListItem): boolean {
+  return getDistillationMode(run) !== null;
+}
+
 export async function startPipelineRun(config: PipelineConfig): Promise<PipelineRunResponse> {
   return apiFetch<PipelineRunResponse>("/pipeline/run", {
     method: "POST",
@@ -81,7 +99,7 @@ export async function getRun(runId: string): Promise<RunDetail> {
   return apiFetch<RunDetail>(`/pipeline/runs/${runId}`);
 }
 
-export function downloadUrl(runId: string, format: "jsonl" | "csv" | "report"): string {
+export function downloadUrl(runId: string, format: "jsonl" | "csv" | "report" | "dpo_jsonl"): string {
   const base = import.meta.env.BASE_URL.replace(/\/$/, "");
   return `${base}/pipeline/runs/${runId}/download?format=${format}`;
 }

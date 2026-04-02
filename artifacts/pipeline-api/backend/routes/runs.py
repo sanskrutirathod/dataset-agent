@@ -146,6 +146,10 @@ def _build_file_response(run_id: str, format: DownloadFormat) -> FileResponse:
         path = export_dir / "dataset.csv"
         media_type = "text/csv"
         filename = f"dataset_{run_id}.csv"
+    elif format == DownloadFormat.dpo_jsonl:
+        path = export_dir / "dataset_dpo.jsonl"
+        media_type = "application/x-ndjson"
+        filename = f"dataset_dpo_{run_id}.jsonl"
     else:
         path = export_dir / "report.md"
         media_type = "text/markdown"

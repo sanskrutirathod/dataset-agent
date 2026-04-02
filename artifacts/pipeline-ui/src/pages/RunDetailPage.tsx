@@ -13,6 +13,18 @@ import {
 
 const CHART_COLORS = ["#6366f1", "#818cf8", "#a5b4fc", "#c7d2fe", "#4f46e5", "#4338ca", "#3730a3", "#312e81"];
 
+const DISTILLATION_LABELS: Record<string, string> = {
+  cot: "Chain-of-Thought (CoT)",
+  dpo: "Direct Preference (DPO)",
+  sft: "Knowledge Distillation (SFT)",
+};
+
+function getDistillationMode(config: Record<string, unknown> | undefined): string | null {
+  if (!config) return null;
+  const generation = config.generation as Record<string, unknown> | undefined;
+  return (generation?.distillation_mode as string) || null;
+}
+
 export default function RunDetailPage() {
   const { id } = useParams<{ id: string }>();
 
@@ -50,6 +62,8 @@ export default function RunDetailPage() {
   }));
 
   const isDone = run.status === "completed" || run.status === "partial";
+  const distillMode = getDistillationMode(run.config);
+  const isDpo = distillMode === "dpo";
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -63,6 +77,11 @@ export default function RunDetailPage() {
         <div className="h-4 w-px bg-border" />
         <h1 className="text-xl font-bold text-foreground">{run.run_name}</h1>
         <StatusBadge status={run.status} />
+        {distillMode && (
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-violet-500/15 text-violet-400 border border-violet-500/25">
+            Distillation · {DISTILLATION_LABELS[distillMode] ?? distillMode}
+          </span>
+        )}
       </div>
 
       <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -165,7 +184,20 @@ export default function RunDetailPage() {
                     </Button>
                   </a>
                 ))}
+                {isDpo && (
+                  <a href={downloadUrl(run.run_id, "dpo_jsonl")} download>
+                    <Button variant="outline" size="sm" className="gap-2 border-violet-500/40 text-violet-400 hover:bg-violet-500/10">
+                      <Download className="w-3.5 h-3.5" />
+                      DPO JSONL
+                    </Button>
+                  </a>
+                )}
               </div>
+              {isDpo && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  DPO JSONL is compatible with TRL's <code className="text-violet-400">DPOTrainer</code> format (prompt / chosen / rejected).
+                </p>
+              )}
             </div>
           ) : isDone && (
             <div className="bg-card rounded-xl border border-card-border p-5">
@@ -176,6 +208,19 @@ export default function RunDetailPage() {
           {run.config && (
             <div className="bg-card rounded-xl border border-card-border p-5">
               <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Configuration</h2>
+              {distillMode && (
+                <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>Distillation Mode:</span>
+                  <span className="font-semibold text-violet-400">{DISTILLATION_LABELS[distillMode] ?? distillMode}</span>
+                  {(run.config.generation as Record<string, unknown> | undefined)?.teacher_model && (
+                    <>
+                      <span>·</span>
+                      <span>Teacher Model:</span>
+                      <span className="font-mono text-foreground">{String((run.config.generation as Record<string, unknown>).teacher_model)}</span>
+                    </>
+                  )}
+                </div>
+              )}
               <pre className="text-xs text-muted-foreground bg-background rounded-lg p-3 overflow-auto max-h-48 border border-border">
                 {JSON.stringify(run.config, null, 2)}
               </pre>
