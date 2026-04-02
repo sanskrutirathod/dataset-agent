@@ -234,6 +234,13 @@ async def push_run_to_hub(run_id: str, body: PushToHubRequest) -> HubStatusRespo
     if not token:
         raise HTTPException(status_code=400, detail="HUGGINGFACE_TOKEN environment variable not set")
 
+    # Validate token format (must start with "hf_" for HF tokens)
+    if not token.startswith("hf_"):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid HUGGINGFACE_TOKEN format. Token must start with 'hf_'"
+        )
+
     update_run_hf_status(run_id, "uploading")
     t = threading.Thread(target=_do_push_to_hub, args=(run_id, body, token), daemon=True)
     t.start()

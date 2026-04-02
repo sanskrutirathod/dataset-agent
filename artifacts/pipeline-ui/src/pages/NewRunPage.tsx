@@ -66,6 +66,7 @@ export default function NewRunPage() {
   const [targetTokens, setTargetTokens] = useState(200);
   const [chunkOverlap, setChunkOverlap] = useState(40);
   const [scoreThreshold, setScoreThreshold] = useState(0.3);
+  const [temperature, setTemperature] = useState(0.7);
   const [error, setError] = useState<string | null>(null);
 
   const mutation = useMutation({
@@ -136,6 +137,7 @@ export default function NewRunPage() {
     const generation: PipelineConfig["generation"] = {
       mode: isDistillationMode(genMode) ? "qa" : (genMode as StandardGenMode),
       max_records_per_chunk: maxPerChunk,
+      temperature: temperature,
     };
 
     if (distillMode) {
@@ -478,6 +480,22 @@ export default function NewRunPage() {
             <div className="flex justify-between text-xs text-muted-foreground mt-1">
               <span>0%</span><span>100%</span>
             </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <Label className="text-sm text-foreground">Temperature</Label>
+              <span className="text-sm font-semibold text-primary tabular-nums">{temperature.toFixed(2)}</span>
+            </div>
+            <Slider
+              min={0} max={1} step={0.05}
+              value={[temperature]}
+              onValueChange={([v]) => setTemperature(v)}
+            />
+            <div className="flex justify-between text-xs text-muted-foreground mt-1">
+              <span>0.00 (deterministic)</span><span>1.00 (creative)</span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Lower values produce more consistent outputs</p>
           </div>
         </div>
 
